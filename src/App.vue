@@ -1,14 +1,15 @@
 <script setup>
-import { ref } from 'vue'
+import {readonly, ref} from 'vue'
 import { computed } from 'vue'
 import { useSerialPort } from './composables/useSerialPort'
-import SerialPortConnection from './components/SerialPortConnection.vue'
+import SerialPortConnection from '@/components/SerialPortConnection.vue'
 import ChannelMonitor from "@/components/ChannelMonitor.vue";
+import DeviceDiscovery from "@/components/DeviceDiscovery.vue"
 
 const drawer = ref(true)
 const rail = ref(true)
 const connectionDialog = ref(true)
-const { isConnected, statusMessage, channelData } = useSerialPort()
+const { isConnected } = useSerialPort()
 
 const onConnected = (connectionInfo) => {
   console.log('Connected to port:', connectionInfo)
@@ -121,7 +122,10 @@ const getStatusColor = computed(() => {
       <v-container>
         <v-row>
           <v-col cols="12">
-            <ChannelMonitor :channels="channelData" />
+            <ChannelMonitor />
+          </v-col>
+          <v-col cols="12">
+            <DeviceDiscovery />
           </v-col>
         </v-row>
       </v-container>

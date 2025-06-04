@@ -1,122 +1,139 @@
 import { ref, readonly } from 'vue'
 
-// Singleton state
 const port = ref(null)
+const reader = ref(null)
+const writer = ref(null)
 const isConnected = ref(false)
 const portInfo = ref(null)
-const selectedBaudRate = ref(115200)
+const selectedBaudRate = ref(420000)
 const statusMessage = ref('Not connected')
 const hasError = ref(false)
-const reader = ref(null)
-const channelData = ref(Array(16).fill(1024))
+const frameHandlers = ref(new Set())
 
-// CRSF frame parsing constants
-const CRSF_SYNC_BYTE = 0xC8
-const CRSF_FRAMELEN_MIN = 4
-const CRSF_SIZE_MAX = 64
-
+// Singleton state
 export function useSerialPort() {
-  const startReading = async () => {
-    if (!port.value) return
 
-    try {
-      reader.value = port.value.readable.getReader()
+  // CRSF protocol constants
+  const CRSF_SYNC_BYTE = 0xC8
 
-      let buffer = new Uint8Array(0)
-
-      while (true) {
-        const { value, done } = await reader.value.read()
-        if (done) break
-
-        // Append new data to existing buffer
-        const newBuffer = new Uint8Array(buffer.length + value.length)
-        newBuffer.set(buffer)
-        newBuffer.set(value, buffer.length)
-        buffer = newBuffer
-
-        // Process buffer for CRSF frames
-        while (buffer.length > 0) {
-          // Look for sync byte
-          const syncIndex = buffer.findIndex(b => b === CRSF_SYNC_BYTE)
-
-          if (syncIndex === -1) {
-            buffer = new Uint8Array(0)
-            break
-          }
-
-          // Remove data before sync byte
-          if (syncIndex > 0) {
-            buffer = buffer.slice(syncIndex)
-          }
-
-          // Check if we have enough data for frame length
-          if (buffer.length < 2) break
-
-          const frameLength = buffer[1]
-
-          // Validate frame length
-          if (frameLength < CRSF_FRAMELEN_MIN || frameLength > CRSF_SIZE_MAX) {
-            buffer = buffer.slice(1)
-            continue
-          }
-
-          // Check if we have complete frame
-          if (buffer.length < frameLength + 2) break
-
-          // Extract frame
-          const frame = buffer.slice(0, frameLength + 2)
-          buffer = buffer.slice(frameLength + 2)
-
-          // Process RC channels frame
-          if (frame[2] === 0x16) { // RC channels
-            console.log('RC channels frame:', frame)
-            processRCChannels(frame.slice(3))
-          }
+  // CRC calculation for CRSF
+  const calculateCRC = (data) => {
+    let crc = 0
+    for (let i = 0; i < data.length; i++) {
+      crc = crc ^ data[i]
+      for (let j = 0; j < 8; j++) {
+        if (crc & 0x80) {
+          crc = (crc << 1) ^ 0xD5
+        } else {
+          crc = crc << 1
         }
+        crc &= 0xFF
       }
-    } catch (error) {
-      console.error('Error reading serial data:', error)
-      throw error
-    } finally {
-      reader.value?.releaseLock()
     }
+    return crc
   }
 
-  const processRCChannels = (data) => {
-    // CRSF RC channels are 11 bits each, packed
-    const channels = new Array(16).fill(0)
-
-    // Each 11-bit channel value is packed across the byte stream
-    // We need 22 bytes to store 16 channels of 11 bits each
-    if (data.length < 22) {
-      console.warn('Incomplete CRSF channel data received')
+  // Send CRSF frame
+  const sendFrame = async (frame) => {
+    if (!writer.value || !isConnected.value) {
+      console.error('Serial port writer not available')
       return
     }
 
-    let byteIndex = 0
-    let bitIndex = 0
+    const frameLength = frame.payload.length + 4
+    const frameBuffer = new Uint8Array(frameLength + 2)
+    let index = 0
 
-    for (let channelIndex = 0; channelIndex < 16; channelIndex++) {
-      let value = 0
+    frameBuffer[index++] = CRSF_SYNC_BYTE
+    frameBuffer[index++] = frameLength
+    frameBuffer[index++] = frame.type
+    frameBuffer[index++] = frame.destination
+    frameBuffer[index++] = frame.origin
+    frameBuffer.set(frame.payload, index)
 
-      // Read up to 3 bytes to get our 11 bits
-      value = data[byteIndex]                         // First byte
-      value |= (data[byteIndex + 1] << 8)            // Second byte
-      value |= (data[byteIndex + 2] << 16)           // Third byte if needed
+    const crc = calculateCRC(frameBuffer.slice(2, frameBuffer.length-1))
+    frameBuffer[frameBuffer.length - 1] = crc
 
-      // Extract 11 bits starting from current bit position
-      value = (value >> bitIndex) & 0x07FF
+    try {
+      await writer.value.write(frameBuffer)
+    } catch (error) {
+      console.error('Error sending frame:', error)
+      statusMessage.value = `Send error: ${error.message}`
+    }
+  }
 
-      channels[channelIndex] = value
+  // Frame handler registration
+  const registerFrameHandler = (handler) => {
+    frameHandlers.value.add(handler)
+  }
 
-      // Move to next channel position
-      bitIndex += 11
-      byteIndex += Math.floor(bitIndex / 8)
-      bitIndex %= 8
+  const unregisterFrameHandler = (handler) => {
+    frameHandlers.value.delete(handler)
+  }
+
+  // Buffer for incomplete frames
+  let receiveBuffer = new Uint8Array()
+
+  // Process received data
+  const processReceivedData = (newData) => {
+    const tempBuffer = new Uint8Array(receiveBuffer.length + newData.length)
+    tempBuffer.set(receiveBuffer)
+    tempBuffer.set(newData, receiveBuffer.length)
+    receiveBuffer = tempBuffer
+
+    while (receiveBuffer.length >= 3) {
+      if (receiveBuffer[0] !== CRSF_SYNC_BYTE) {
+        receiveBuffer = receiveBuffer.slice(1)
+        continue
+      }
+
+      const frameLength = receiveBuffer[1]
+      const totalLength = frameLength + 2
+
+      if (receiveBuffer.length < totalLength) {
+        break
+      }
+
+      const frameData = receiveBuffer.slice(0, totalLength)
+      receiveBuffer = receiveBuffer.slice(totalLength)
+
+      const calculatedCRC = calculateCRC(frameData.slice(2, -1))
+      if (calculatedCRC === frameData[frameData.length - 1]) {
+        const frame = {
+          type: frameData[2],
+          destination: frameData[2] < 0x28 ? 0 : frameData[3],
+          origin: frameData[2] < 0x28 ? 0 : frameData[4],
+          payload: frameData[2] < 0x28 ? frameData.slice(3, -1) : frameData.slice(5, -1)
+        }
+
+        // Notify all registered handlers
+        frameHandlers.value.forEach(handler => {
+          handler(frame)
+        })
+      }
+    }
+  }
+
+  const readLoop = async () => {
+    while (port.value && reader.value) {
+      try {
+        const { value, done } = await reader.value.read()
+        if (done) {
+          console.log('Reader closed')
+          break
+        }
+        processReceivedData(value)
+      } catch (error) {
+        console.error('Error reading from port:', error)
+        statusMessage.value = `Read error: ${error.message}`
+        break
+      }
     }
 
-    // Update channel values
-    channelData.value = channels
+    // Clean up if the loop exits
+    if (isConnected.value) {
+      await disconnect()
+    }
   }
 
   const connect = async (baudRate) => {
@@ -135,8 +152,11 @@ export function useSerialPort() {
       selectedBaudRate.value = baudRate || selectedBaudRate.value
       statusMessage.value = `Connected to ${getPortDescription()}`
 
+      reader.value = port.value.readable.getReader()
+      writer.value = port.value.writable.getWriter()
+
       // Start reading data
-      startReading()
+      readLoop()
 
       return {
         port: selectedPort,
@@ -205,12 +225,14 @@ export function useSerialPort() {
     statusMessage: readonly(statusMessage),
     hasError: readonly(hasError),
     selectedBaudRate: readonly(selectedBaudRate),
-    channelData: readonly(channelData),
 
     // Methods
+    setBaudRate,
     connect,
     disconnect,
     getPortDescription,
-    setBaudRate
+    sendFrame,
+    registerFrameHandler,
+    unregisterFrameHandler
   }
 }

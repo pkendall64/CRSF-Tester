@@ -1,12 +1,11 @@
 <script setup>
-import { ref, computed } from 'vue'
+import {ref, onMounted, onUnmounted} from 'vue'
+import { useSerialPort } from '../composables/useSerialPort'
+const { registerFrameHandler, unregisterFrameHandler } = useSerialPort()
 
-const props = defineProps({
-  channels: {
-    type: Array,
-    default: () => Array(16).fill(0)
-  }
-})
+const CRSF_FRAMETYPE_RC_CHANNELS_PACKED = 0x16
+
+let channelData = ref(Array(16).fill(0))
 
 // Compute percentage for v-progress-linear
 const getPercentage = (value) => {
@@ -23,10 +22,50 @@ const channelLabels = Array.from({ length: 16 }, (_, i) => `CH${i + 1}`)
 
 // Color computation based on value
 const getColor = (value) => {
-  if (value < 682) return 'red' // First third
-  if (value < 1365) return 'orange' // Second third
+  // if (value < 682) return 'red' // First third
+  // if (value < 1365) return 'orange' // Second third
   return 'green' // Last third
 }
+
+const handleRCFrame = (frame) => {
+  if (frame.type === CRSF_FRAMETYPE_RC_CHANNELS_PACKED) {
+    // CRSF RC channels are 11 bits each, packed
+    const channels = new Array(16).fill(0)
+    let byteIndex = 0
+    let bitIndex = 0
+
+    for (let channelIndex = 0; channelIndex < 16; channelIndex++) {
+      let value = 0
+
+      // Read up to 3 bytes to get our 11 bits
+      value = frame.payload[byteIndex]                         // First byte
+      value |= (frame.payload[byteIndex + 1] << 8)            // Second byte
+      value |= (frame.payload[byteIndex + 2] << 16)           // Third byte if needed
+
+      // Extract 11 bits starting from current bit position
+      value = (value >> bitIndex) & 0x07FF
+
+      channels[channelIndex] = value
+
+      // Move to next channel position
+      bitIndex += 11
+      byteIndex += Math.floor(bitIndex / 8)
+      bitIndex %= 8
+    }
+
+    // Update channel values
+    channelData.value = channels
+  }
+}
+
+// Register and unregister frame handler
+onMounted(() => {
+  registerFrameHandler(handleRCFrame)
+})
+
+onUnmounted(() => {
+  unregisterFrameHandler(handleRCFrame)
+})
 </script>
 
 <template>
@@ -46,7 +85,7 @@ const getColor = (value) => {
       <v-container>
         <v-row dense>
           <v-col
-              v-for="(value, index) in channels"
+              v-for="(value, index) in channelData"
               :key="index"
               cols="12"
               sm="6"
