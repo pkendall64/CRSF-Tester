@@ -5,6 +5,7 @@ import { useSerialPort } from './composables/useSerialPort'
 import SerialPortConnection from '@/components/SerialPortConnection.vue'
 import ChannelMonitor from "@/components/ChannelMonitor.vue";
 import DeviceDiscovery from "@/components/DeviceDiscovery.vue"
+import LinkStats from "@/components/LinkStats.vue";
 
 const drawer = ref(true)
 const rail = ref(true)
@@ -79,6 +80,11 @@ const getStatusColor = computed(() => {
           </v-col>
           <v-col cols="12">
             <DeviceDiscovery />
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col cols="12">
+            <LinkStats />
           </v-col>
         </v-row>
       </v-container>
