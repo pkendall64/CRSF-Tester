@@ -1,7 +1,7 @@
 <script setup>
-import { ref} from 'vue'
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useSerialPort } from './composables/useSerialPort'
+import { useDeviceId } from './composables/useDeviceId'
 import SerialPortConnection from '@/components/SerialPortConnection.vue'
 import ChannelMonitor from "@/components/ChannelMonitor.vue";
 import DeviceDiscovery from "@/components/DeviceDiscovery.vue"
@@ -9,6 +9,15 @@ import LinkStats from "@/components/LinkStats.vue";
 
 const connectionDialog = ref(true)
 const { isConnected } = useSerialPort()
+const { selectedDeviceId } = useDeviceId()
+
+// Device ID options
+const deviceIds = [
+  { title: 'Flight Controller (0xC8)', value: '0xC8' },
+  { title: 'Radio Transmitter (0xEA)', value: '0xEA' },
+  { title: 'USB Device (0x10)', value: '0x10' },
+  { title: 'Broadcast (0x00)', value: '0x00' }
+]
 
 const onConnected = (connectionInfo) => {
   console.log('Connected to port:', connectionInfo)
@@ -49,6 +58,15 @@ const getStatusColor = computed(() => {
     <v-app-bar>
       <v-app-bar-title>CRSF Tester Dashboard</v-app-bar-title>
       <template v-slot:append>
+        <span class="text-subtitle-2 mr-2">Device ID:</span>
+        <v-select
+            v-model="selectedDeviceId"
+            :items="deviceIds"
+            density="compact"
+            hide-details
+            class="device-select mr-4"
+            variant="outlined"
+        />
         <v-chip
             :color="getStatusColor"
             size="small"
@@ -112,6 +130,13 @@ const getStatusColor = computed(() => {
 .fill-width {
   width: 100% !important;
   max-width: 100% !important;
+}
+.device-select {
+  max-width: 250px;
+}
+
+:deep(.v-field__input) {
+  min-height: 32px !important;
 }
 
 .v-container {

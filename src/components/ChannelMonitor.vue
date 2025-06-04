@@ -70,48 +70,49 @@ onUnmounted(() => {
 
 <template>
   <v-card>
-    <v-card-title class="text-h6">
-      Channel Monitor
-      <v-spacer></v-spacer>
-    </v-card-title>
-
-    <v-card-text>
-      <v-container>
-        <v-row dense>
-          <v-col
-              v-for="(value, index) in channelData"
-              :key="index"
-              cols="12"
-              sm="6"
-              md="4"
-              lg="3"
-          >
-            <v-card variant="outlined" class="pa-2">
-              <div class="d-flex align-center mb-1">
-                <span class="text-subtitle-2">{{ channelLabels[index] }}</span>
-                <v-spacer></v-spacer>
-                <span class="text-caption">{{ formatValue(value) }}</span>
-              </div>
-              <v-progress-linear
-                  :model-value="getPercentage(value)"
-                  :color="getColor(value)"
-                  height="20"
-                  rounded
-              >
-                <template v-slot:default="{ value }">
-                  <span class="text-caption white--text">{{ formatValue(value * 20.47) }}</span>
-                </template>
-              </v-progress-linear>
-            </v-card>
-          </v-col>
-        </v-row>
-      </v-container>
+    <v-card-title class="text-h6">Channel Monitor</v-card-title>
+    <v-card-text class="channels-container pa-2">
+      <div v-for="(value, index) in channelData" :key="index" class="channel-row">
+        <div class="channel-label">{{ channelLabels[index] }}</div>
+        <v-progress-linear
+            :model-value="getPercentage(value)"
+            :color="getColor(value)"
+            height="16"
+            rounded
+        >
+          <span class="channel-value">{{ formatValue(value) }}</span>
+        </v-progress-linear>
+      </div>
     </v-card-text>
   </v-card>
 </template>
 
 <style scoped>
-.v-progress-linear {
+.channels-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.channel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.channel-label {
+  min-width: 48px;
+  font-size: 0.875rem;
+}
+
+.channel-value {
+  color: white;
+  font-size: 0.75rem;
+  text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+}
+
+:deep(.v-progress-linear) {
+  flex-grow: 1;
   transition: all 0.2s ease-out;
 }
 </style>

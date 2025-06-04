@@ -1,21 +1,48 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
+import { useDeviceId } from '../composables/useDeviceId'
 
 const deviceList = ref([])
 const scanning = ref(false)
 const { sendFrame, registerFrameHandler, unregisterFrameHandler } = useSerialPort()
+const { getDeviceIdNumber } = useDeviceId()
 
 // CRSF frame types
 const CRSF_FRAMETYPE_DEVICE_PING = 0x28
 const CRSF_FRAMETYPE_DEVICE_INFO = 0x29
 
+// Helper function to parse null-terminated string from Uint8Array
+const parseNullTerminatedString = (array) => {
+  const nullIndex = array.findIndex(byte => byte === 0)
+  return new TextDecoder().decode(array.slice(0, nullIndex >= 0 ? nullIndex : undefined))
+}
+
+// Helper function to parse 32-bit number from Uint8Array in big-endian order
+const parseUint32 = (array, offset) => {
+  return (array[offset] << 24) |
+      (array[offset + 1] << 16) |
+      (array[offset + 2] << 8) |
+      (array[offset + 3])
+}
+
 // Handler for DEVICE_INFO responses
 const handleDeviceInfo = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_DEVICE_INFO) {
+    const payload = frame.payload
+
+    // Find the end of the device name
+    const nameEndIndex = payload.findIndex(byte => byte === 0)
+    const nameLength = nameEndIndex >= 0 ? nameEndIndex : payload.length
+
     const deviceInfo = {
-      name: new TextDecoder().decode(frame.payload.slice(0, -1)), // Remove null terminator
+      name: parseNullTerminatedString(payload),
       address: frame.origin,
+      serialNumber: parseUint32(payload, nameLength + 1),
+      hardwareId: parseUint32(payload, nameLength + 5),
+      firmwareId: parseUint32(payload, nameLength + 9),
+      parametersTotal: payload[nameLength + 13],
+      parameterVersion: payload[nameLength + 14],
       timestamp: new Date()
     }
 
@@ -37,7 +64,7 @@ const startScan = () => {
   const pingFrame = {
     type: CRSF_FRAMETYPE_DEVICE_PING,
     destination: 0x00, // Broadcast
-    origin: 0xC8,     // Our address (Flight Controller)
+    origin: getDeviceIdNumber(), // Use selected device ID
     payload: new Uint8Array([]) // Empty payload
   }
 
@@ -81,7 +108,7 @@ onUnmounted(() => {
             v-for="device in deviceList"
             :key="device.address"
             :title="device.name"
-            :subtitle="`Address: 0x${device.address.toString(16).padStart(2, '0')}`"
+            :subtitle="`ID: 0x${device.address.toString(16).padStart(2, '0')} | S/N: ${device.serialNumber} | HW: ${device.hardwareId} | FW: ${device.firmwareId} | Params: ${device.parametersTotal}`"
         >
           <template v-slot:prepend>
             <v-icon>mdi-radio-tower</v-icon>
