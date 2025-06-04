@@ -1,5 +1,5 @@
 <script setup>
-import {readonly, ref} from 'vue'
+import { ref} from 'vue'
 import { computed } from 'vue'
 import { useSerialPort } from './composables/useSerialPort'
 import SerialPortConnection from '@/components/SerialPortConnection.vue'
@@ -7,8 +7,6 @@ import ChannelMonitor from "@/components/ChannelMonitor.vue";
 import DeviceDiscovery from "@/components/DeviceDiscovery.vue"
 import LinkStats from "@/components/LinkStats.vue";
 
-const drawer = ref(true)
-const rail = ref(true)
 const connectionDialog = ref(true)
 const { isConnected } = useSerialPort()
 
@@ -72,19 +70,17 @@ const getStatusColor = computed(() => {
     </v-app-bar>
 
     <!-- Main Content -->
-    <v-main>
-      <v-container>
+    <v-main bg-color="#f5f5f5" class="fill-width">
+      <v-container class="pa-2" fluid>
         <v-row>
-          <v-col cols="12">
+          <v-col cols="12" md="12" lg="4">
+            <LinkStats />
+          </v-col>
+          <v-col cols="12" md="6" lg="4">
             <ChannelMonitor />
           </v-col>
-          <v-col cols="12">
+          <v-col cols="12" md="6" lg="4">
             <DeviceDiscovery />
-          </v-col>
-        </v-row>
-        <v-row>
-          <v-col cols="12">
-            <LinkStats />
           </v-col>
         </v-row>
       </v-container>
@@ -112,5 +108,13 @@ const getStatusColor = computed(() => {
 .v-navigation-drawer :deep(.v-list-item--selected) {
   background-color: rgb(var(--v-theme-primary));
   color: white;
+}
+.fill-width {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.v-container {
+  max-width: none !important;
 }
 </style>
