@@ -5,7 +5,7 @@ import { useDeviceId } from '../composables/useDeviceId'
 
 const deviceList = ref([])
 const scanning = ref(false)
-const { sendFrame, registerFrameHandler, unregisterFrameHandler } = useSerialPort()
+const { sendFrame, registerFrameHandler, unregisterFrameHandler, isConnected } = useSerialPort()
 const { getDeviceIdNumber } = useDeviceId()
 const selectedDevice = defineModel(
   'selectedDevice',
@@ -123,9 +123,9 @@ onUnmounted(() => {
             <template v-slot:append>
               <v-chip
                   size="small"
-                  :color="selectedDevice?.address === device.address ? 'primary' : 'success'"
+                  :color="!isConnected ? 'error' : selectedDevice?.address === device.address ? 'primary' : 'success'"
               >
-                {{ selectedDevice?.address === device.address ? 'Selected' : 'Online' }}
+                {{ !isConnected ? 'Offline' : selectedDevice?.address === device.address ? 'Selected' : 'Online' }}
               </v-chip>
             </template>
           </v-list-item>

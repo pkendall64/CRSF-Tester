@@ -193,6 +193,7 @@ export function useSerialPort() {
       hasError.value = false
       statusMessage.value = 'Requesting port access...'
 
+      navigator.serial.ondisconnect = (e) => { disconnect() }
       const selectedPort = await navigator.serial.requestPort()
 
       statusMessage.value = 'Opening port...'
