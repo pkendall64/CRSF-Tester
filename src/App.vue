@@ -46,53 +46,6 @@ const getStatusColor = computed(() => {
 
 <template>
   <v-app>
-    <!-- Navigation Drawer -->
-    <v-navigation-drawer
-      v-model="drawer"
-      :rail="rail"
-      permanent
-    >
-      <v-list-item
-        prepend-avatar="https://randomuser.me/api/portraits/men/85.jpg"
-        title="CRSF Tester"
-      >
-        <template v-slot:append>
-          <v-btn
-            variant="text"
-            icon="mdi-chevron-left"
-            @click.stop="rail = !rail"
-          ></v-btn>
-        </template>
-      </v-list-item>
-
-      <v-divider></v-divider>
-
-      <v-list density="compact" nav>
-        <v-list-item
-          prepend-icon="mdi-view-dashboard"
-          title="Dashboard"
-          value="dashboard"
-          selected
-        ></v-list-item>
-        <v-list-item
-          prepend-icon="mdi-usb-port"
-          title="Connection"
-          value="connection"
-          @click="showConnectionDialog"
-        ></v-list-item>
-        <v-list-item
-          prepend-icon="mdi-chart-line"
-          title="Monitoring"
-          value="monitoring"
-        ></v-list-item>
-        <v-list-item
-          prepend-icon="mdi-cog"
-          title="Settings"
-          value="settings"
-        ></v-list-item>
-      </v-list>
-    </v-navigation-drawer>
-
     <!-- App Bar -->
     <v-app-bar>
       <v-app-bar-title>CRSF Tester Dashboard</v-app-bar-title>
@@ -104,16 +57,16 @@ const getStatusColor = computed(() => {
         >
           {{ getConnectionStatus }}
         </v-chip>
-        <v-btn
-            icon="mdi-usb-port"
-            @click="showConnectionDialog"
-        >
-          <v-tooltip activator="parent" location="bottom">
-            Manage Connection
-          </v-tooltip>
-        </v-btn>
-        <v-btn icon="mdi-refresh"></v-btn>
-        <v-btn icon="mdi-dots-vertical"></v-btn>
+        <v-tooltip activator="parent" location="bottom">
+          <template #activator="{ props }">
+            <v-btn
+                icon="mdi-usb-port"
+                @click="showConnectionDialog"
+                v-bind="props"
+            />
+          </template>
+          <span>Manage Connection</span>
+        </v-tooltip>
       </template>
     </v-app-bar>
 

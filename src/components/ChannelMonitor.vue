@@ -73,12 +73,6 @@ onUnmounted(() => {
     <v-card-title class="text-h6">
       Channel Monitor
       <v-spacer></v-spacer>
-      <v-chip
-          size="small"
-          color="primary"
-      >
-        16 Channels
-      </v-chip>
     </v-card-title>
 
     <v-card-text>

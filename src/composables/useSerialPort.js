@@ -173,9 +173,15 @@ export function useSerialPort() {
   }
 
   const disconnect = async () => {
+    isConnected.value = false
+
     if (reader.value) {
       await reader.value.cancel()
       reader.value = null
+    }
+    if (writer.value) {
+      await writer.value.releaseLock()
+      writer.value = null
     }
 
     if (port.value) {
