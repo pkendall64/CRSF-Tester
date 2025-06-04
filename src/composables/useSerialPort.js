@@ -33,6 +33,48 @@ export function useSerialPort() {
     return crc
   }
 
+  const frameToHexString = (frame) => {
+    // Calculate total frame length
+    const frameLength = frame.payload.length + 4 // type + dest + origin + payload + crc
+    const frameBuffer = new Uint8Array(frameLength + 2) // +2 for sync byte and length
+    let index = 0
+
+    // Construct frame buffer
+    frameBuffer[index++] = CRSF_SYNC_BYTE
+    frameBuffer[index++] = frameLength
+    frameBuffer[index++] = frame.type
+    frameBuffer[index++] = frame.destination
+    frameBuffer[index++] = frame.origin
+    frameBuffer.set(frame.payload, index)
+    index += frame.payload.length
+
+    // Calculate and add CRC
+    const crc = calculateCRC(frameBuffer.slice(2, index))
+    frameBuffer[index] = crc
+
+    // Convert to hex string with formatting
+    let hexString = Array.from(frameBuffer)
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join(' ')
+
+    // Add structure markers
+    const parts = {
+      sync: hexString.slice(0, 2),
+      len: hexString.slice(3, 5),
+      type: hexString.slice(6, 8),
+      dest: hexString.slice(9, 11),
+      origin: hexString.slice(12, 14),
+      payload: hexString.slice(15, -3),
+      crc: hexString.slice(-2)
+    }
+
+    return {
+      raw: hexString,
+      formatted: `[${parts.sync}] ${parts.len} ${parts.type} ${parts.dest} ${parts.origin} ${parts.payload} [${parts.crc}]`,
+      parts
+    }
+  }
+
   // Send CRSF frame
   const sendFrame = async (frame) => {
     if (!writer.value || !isConnected.value) {
@@ -53,6 +95,11 @@ export function useSerialPort() {
 
     const crc = calculateCRC(frameBuffer.slice(2, frameBuffer.length-1))
     frameBuffer[frameBuffer.length - 1] = crc
+
+    // Use the new logging function
+    const hexLog = frameToHexString(frame)
+    console.log('Sending frame:', hexLog.formatted)
+    console.log('Frame parts:', hexLog.parts)
 
     try {
       await writer.value.write(frameBuffer)
@@ -105,6 +152,11 @@ export function useSerialPort() {
           origin: frameData[2] < 0x28 ? 0 : frameData[4],
           payload: frameData[2] < 0x28 ? frameData.slice(3, -1) : frameData.slice(5, -1)
         }
+
+        // Log received frame
+        const hexLog = frameToHexString(frame)
+        console.log('Received frame:', hexLog.formatted)
+        console.log('Frame parts:', hexLog.parts)
 
         // Notify all registered handlers
         frameHandlers.value.forEach(handler => {

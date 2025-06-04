@@ -2,11 +2,13 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
 import { useDeviceId } from '../composables/useDeviceId'
+import DeviceParameters from "@/components/DeviceParameters.vue";
 
 const deviceList = ref([])
 const scanning = ref(false)
 const { sendFrame, registerFrameHandler, unregisterFrameHandler } = useSerialPort()
 const { getDeviceIdNumber } = useDeviceId()
+const selectedDevice = ref(null)
 
 // CRSF frame types
 const CRSF_FRAMETYPE_DEVICE_PING = 0x28
@@ -87,48 +89,58 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <v-card>
-    <v-card-title class="d-flex align-center">
-      Device Discovery
-      <v-spacer></v-spacer>
-      <v-btn
-          :loading="scanning"
-          :disabled="scanning"
-          color="primary"
-          @click="startScan"
-      >
-        <v-icon start>mdi-radar</v-icon>
-        Scan for Devices
-      </v-btn>
-    </v-card-title>
-
-    <v-card-text>
-      <v-list v-if="deviceList.length > 0">
-        <v-list-item
-            v-for="device in deviceList"
-            :key="device.address"
-            :title="device.name"
-            :subtitle="`ID: 0x${device.address.toString(16).padStart(2, '0')} | S/N: ${device.serialNumber} | HW: ${device.hardwareId} | FW: ${device.firmwareId} | Params: ${device.parametersTotal}`"
+  <div>
+    <v-card class="mb-4">
+      <v-card-title class="d-flex align-center">
+        Device Discovery
+        <v-spacer></v-spacer>
+        <v-btn
+            :loading="scanning"
+            :disabled="scanning"
+            color="primary"
+            @click="startScan"
         >
-          <template v-slot:prepend>
-            <v-icon>mdi-radio-tower</v-icon>
-          </template>
-          <template v-slot:append>
-            <v-chip
-                size="small"
-                color="success"
-            >
-              Online
-            </v-chip>
-          </template>
-        </v-list-item>
-      </v-list>
+          <v-icon start>mdi-radar</v-icon>
+          Scan for Devices
+        </v-btn>
+      </v-card-title>
 
-      <v-alert
-          v-else
-          type="info"
-          text="No devices found. Click 'Scan for Devices' to search for CRSF devices."
-      ></v-alert>
-    </v-card-text>
-  </v-card>
+      <v-card-text>
+        <v-list v-if="deviceList.length > 0">
+          <v-list-item
+              v-for="device in deviceList"
+              :key="device.address"
+              :title="device.name"
+              :subtitle="`ID: 0x${device.address.toString(16).padStart(2, '0')} | S/N: ${device.serialNumber} | HW: ${device.hardwareId} | FW: ${device.firmwareId} | Params: ${device.parametersTotal}`"
+              @click="selectedDevice = device"
+          >
+            <template v-slot:prepend>
+              <v-icon>mdi-radio-tower</v-icon>
+            </template>
+            <template v-slot:append>
+              <v-chip
+                  size="small"
+                  :color="selectedDevice?.address === device.address ? 'primary' : 'success'"
+              >
+                {{ selectedDevice?.address === device.address ? 'Selected' : 'Online' }}
+              </v-chip>
+            </template>
+          </v-list-item>
+        </v-list>
+
+        <v-alert
+            v-else
+            type="info"
+            text="No devices found. Click 'Scan for Devices' to search for CRSF devices."
+        ></v-alert>
+      </v-card-text>
+    </v-card>
+    <!-- Device Parameters Component -->
+    <DeviceParameters
+        v-if="selectedDevice"
+        :device-id="selectedDevice.address"
+        :device-name="selectedDevice.name"
+        :parameter-count="selectedDevice.parametersTotal"
+    />
+  </div>
 </template>
