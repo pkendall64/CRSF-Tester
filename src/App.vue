@@ -6,10 +6,12 @@ import SerialPortConnection from '@/components/SerialPortConnection.vue'
 import ChannelMonitor from "@/components/ChannelMonitor.vue";
 import DeviceDiscovery from "@/components/DeviceDiscovery.vue"
 import LinkStats from "@/components/LinkStats.vue";
+import DeviceParameters from "@/components/DeviceParameters.vue";
 
 const connectionDialog = ref(true)
 const { isConnected } = useSerialPort()
 const { selectedDeviceId } = useDeviceId()
+const selectedDevice = ref(null)
 
 // Device ID options
 const deviceIds = [
@@ -108,16 +110,15 @@ const getStatusColor = computed(() => {
           <v-col cols="12" md="6" lg="8" class="right-column">
             <!-- Device Discovery Card -->
             <v-card class="mb-4">
-              <DeviceDiscovery />
+              <DeviceDiscovery v-model:selected-device="selectedDevice"/>
             </v-card>
-
-            <!-- Parameters Card - Only show if parameters are loaded -->
-            <v-card v-if="parameters?.length">
-              <v-card-title>Parameters</v-card-title>
-              <v-card-text>
-                <!-- Parameters content will go here -->
-              </v-card-text>
-            </v-card>
+            <!-- Device Parameters Component -->
+            <DeviceParameters
+                v-if="selectedDevice"
+                :device-id="selectedDevice.address"
+                :device-name="selectedDevice.name"
+                :parameter-count="selectedDevice.parametersTotal"
+            />
           </v-col>
         </v-row>
       </v-container>

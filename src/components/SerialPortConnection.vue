@@ -2,13 +2,6 @@
 import { ref, watch } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
 
-const props = defineProps({
-  initialBaudRate: {
-    type: Number,
-    default: 420000
-  }
-})
-
 const emit = defineEmits(['connected', 'disconnected', 'error', 'status-change'])
 
 const baudRates = [9600, 19200, 38400, 57600, 115200, 420000]

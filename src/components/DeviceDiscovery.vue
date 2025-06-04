@@ -2,13 +2,15 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
 import { useDeviceId } from '../composables/useDeviceId'
-import DeviceParameters from "@/components/DeviceParameters.vue";
 
 const deviceList = ref([])
 const scanning = ref(false)
 const { sendFrame, registerFrameHandler, unregisterFrameHandler } = useSerialPort()
 const { getDeviceIdNumber } = useDeviceId()
-const selectedDevice = ref(null)
+const selectedDevice = defineModel(
+  'selectedDevice',
+  {type:Object, default: null}
+)
 
 // CRSF frame types
 const CRSF_FRAMETYPE_DEVICE_PING = 0x28
@@ -136,12 +138,5 @@ onUnmounted(() => {
         ></v-alert>
       </v-card-text>
     </v-card>
-    <!-- Device Parameters Component -->
-    <DeviceParameters
-        v-if="selectedDevice"
-        :device-id="selectedDevice.address"
-        :device-name="selectedDevice.name"
-        :parameter-count="selectedDevice.parametersTotal"
-    />
   </div>
 </template>
