@@ -5,13 +5,13 @@ import { useSerialPort } from '../composables/useSerialPort'
 const props = defineProps({
   initialBaudRate: {
     type: Number,
-    default: 9600
+    default: 420000
   }
 })
 
 const emit = defineEmits(['connected', 'disconnected', 'error', 'status-change'])
 
-const baudRates = [9600, 19200, 38400, 57600, 115200]
+const baudRates = [9600, 19200, 38400, 57600, 115200, 420000]
 const isDialogOpen = ref(false)
 
 const {
@@ -21,8 +21,12 @@ const {
   selectedBaudRate,
   connect,
   disconnect,
-  getPortDescription
+  setBaudRate
 } = useSerialPort()
+
+const onBaudRateChange = (newRate) => {
+  setBaudRate(newRate)
+}
 
 async function connectToSerial() {
   try {
@@ -81,6 +85,7 @@ watch([statusMessage, hasError], ([message, isError]) => {
         <v-col cols="12" sm="6">
           <v-select
               v-model="selectedBaudRate"
+              @update:model-value="onBaudRateChange"
               :items="baudRates"
               label="Baud Rate"
               :disabled="isConnected || isDialogOpen"

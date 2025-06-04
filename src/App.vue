@@ -3,11 +3,12 @@ import { ref } from 'vue'
 import { computed } from 'vue'
 import { useSerialPort } from './composables/useSerialPort'
 import SerialPortConnection from './components/SerialPortConnection.vue'
+import ChannelMonitor from "@/components/ChannelMonitor.vue";
 
 const drawer = ref(true)
 const rail = ref(true)
 const connectionDialog = ref(true)
-const { isConnected, statusMessage } = useSerialPort()
+const { isConnected, statusMessage, channelData } = useSerialPort()
 
 const onConnected = (connectionInfo) => {
   console.log('Connected to port:', connectionInfo)
@@ -39,6 +40,7 @@ const getConnectionStatus = computed(() => {
 const getStatusColor = computed(() => {
   return isConnected.value ? 'success' : 'error'
 })
+
 </script>
 
 <template>
@@ -119,12 +121,7 @@ const getStatusColor = computed(() => {
       <v-container>
         <v-row>
           <v-col cols="12">
-            <v-card>
-              <v-card-title>Welcome to CRSF Tester</v-card-title>
-              <v-card-text>
-                <p>Please connect to a serial port to begin testing.</p>
-              </v-card-text>
-            </v-card>
+            <ChannelMonitor :channels="channelData" />
           </v-col>
         </v-row>
       </v-container>
