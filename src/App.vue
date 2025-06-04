@@ -56,9 +56,9 @@ const getStatusColor = computed(() => {
   <v-app>
     <!-- App Bar -->
     <v-app-bar>
-      <v-app-bar-title>CRSF Tester Dashboard</v-app-bar-title>
+      <v-app-bar-title>CRSF Tester</v-app-bar-title>
       <template v-slot:append>
-        <span class="text-subtitle-2 mr-2">Device ID:</span>
+        <span class="text-subtitle-2 mr-2">My Device ID:</span>
         <v-select
             v-model="selectedDeviceId"
             :items="deviceIds"
@@ -89,16 +89,35 @@ const getStatusColor = computed(() => {
 
     <!-- Main Content -->
     <v-main bg-color="#f5f5f5" class="fill-width">
-      <v-container class="pa-2" fluid>
+      <v-container class="pa-2 main-container" fluid>
         <v-row>
-          <v-col cols="12" md="12" lg="4">
-            <LinkStats />
+          <!-- Left Column -->
+          <v-col cols="12" md="6" lg="4" class="left-column">
+            <!-- Link Stats Card -->
+            <v-card class="mb-4">
+              <LinkStats />
+            </v-card>
+
+            <!-- Channel Monitor Card -->
+            <v-card>
+              <ChannelMonitor />
+            </v-card>
           </v-col>
-          <v-col cols="12" md="6" lg="4">
-            <ChannelMonitor />
-          </v-col>
-          <v-col cols="12" md="6" lg="4">
-            <DeviceDiscovery />
+
+          <!-- Right Column -->
+          <v-col cols="12" md="6" lg="8" class="right-column">
+            <!-- Device Discovery Card -->
+            <v-card class="mb-4">
+              <DeviceDiscovery />
+            </v-card>
+
+            <!-- Parameters Card - Only show if parameters are loaded -->
+            <v-card v-if="parameters?.length">
+              <v-card-title>Parameters</v-card-title>
+              <v-card-text>
+                <!-- Parameters content will go here -->
+              </v-card-text>
+            </v-card>
           </v-col>
         </v-row>
       </v-container>
@@ -139,7 +158,8 @@ const getStatusColor = computed(() => {
   min-height: 32px !important;
 }
 
-.v-container {
-  max-width: none !important;
+.main-container {
+  padding-left: 24px !important;
+  padding-right: 24px !important;
 }
 </style>

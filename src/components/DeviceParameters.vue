@@ -38,6 +38,16 @@ const parseNullTerminatedString = (array) => {
   return new TextDecoder().decode(array.slice(0, nullIndex >= 0 ? nullIndex : undefined))
 }
 
+const parseNullTerminatedString2 = (array, offset) => {
+  const nullIndex = offset + array.slice(offset).findIndex(byte => byte === 0)
+  const strValue = new TextDecoder().decode(array.slice(offset, nullIndex >= 0 ? nullIndex : undefined))
+  const newOffset = nullIndex >= 0 ? nullIndex+1 : undefined
+  console.log('strValue:', strValue)
+  console.log('newOffset:', newOffset)
+  return { strValue, newOffset }
+}
+
+
 // Helper function to parse parameter value based on type and decimal point
 const parseParameterValue = (value, type, decimalPoint) => {
   if (type === DATA_TYPE_FLOAT) {
@@ -70,16 +80,12 @@ const parameterParsers = {
     const parentFolder = payload[offset++]
     const dataType = payload[offset++] & 0x3F
 
-    // Parse name (null-terminated string)
-    const nameEnd = payload.indexOf(0, offset)
-    const name = parseNullTerminatedString(payload.slice(offset, nameEnd))
-    offset = nameEnd + 1
-
+    const {strValue, newOffset} = parseNullTerminatedString2(payload, 2)
     return {
       parentFolder,
       dataType,
-      name,
-      offset
+      name: strValue,
+      offset: newOffset
     }
   },
 
@@ -106,10 +112,10 @@ const parameterParsers = {
   [PARAM_TYPE.UINT16](payload, offset) {
     const view = new DataView(payload.buffer)
     return {
-      value: view.getUint16(offset, true),
-      min: view.getUint16(offset + 2, true),
-      max: view.getUint16(offset + 4, true),
-      default: view.getUint16(offset + 6, true),
+      value: view.getUint16(offset),
+      min: view.getUint16(offset + 2),
+      max: view.getUint16(offset + 4),
+      default: view.getUint16(offset + 6),
       unit: parseNullTerminatedString(payload.slice(offset + 8))
     }
   },
@@ -117,10 +123,10 @@ const parameterParsers = {
   [PARAM_TYPE.INT16](payload, offset) {
     const view = new DataView(payload.buffer)
     return {
-      value: view.getInt16(offset, true),
-      min: view.getInt16(offset + 2, true),
-      max: view.getInt16(offset + 4, true),
-      default: view.getInt16(offset + 6, true),
+      value: view.getInt16(offset),
+      min: view.getInt16(offset + 2),
+      max: view.getInt16(offset + 4),
+      default: view.getInt16(offset + 6),
       unit: parseNullTerminatedString(payload.slice(offset + 8))
     }
   },
@@ -128,10 +134,10 @@ const parameterParsers = {
   [PARAM_TYPE.UINT32](payload, offset) {
     const view = new DataView(payload.buffer)
     return {
-      value: view.getUint32(offset, true),
-      min: view.getUint32(offset + 4, true),
-      max: view.getUint32(offset + 8, true),
-      default: view.getUint32(offset + 12, true),
+      value: view.getUint32(offset),
+      min: view.getUint32(offset + 4),
+      max: view.getUint32(offset + 8),
+      default: view.getUint32(offset + 12),
       unit: parseNullTerminatedString(payload.slice(offset + 16))
     }
   },
@@ -139,10 +145,10 @@ const parameterParsers = {
   [PARAM_TYPE.INT32](payload, offset) {
     const view = new DataView(payload.buffer)
     return {
-      value: view.getInt32(offset, true),
-      min: view.getInt32(offset + 4, true),
-      max: view.getInt32(offset + 8, true),
-      default: view.getInt32(offset + 12, true),
+      value: view.getInt32(offset),
+      min: view.getInt32(offset + 4),
+      max: view.getInt32(offset + 8),
+      default: view.getInt32(offset + 12),
       unit: parseNullTerminatedString(payload.slice(offset + 16))
     }
   },
@@ -150,26 +156,25 @@ const parameterParsers = {
   [PARAM_TYPE.FLOAT](payload, offset) {
     const view = new DataView(payload.buffer)
     return {
-      value: view.getInt32(offset, true),
-      min: view.getInt32(offset + 4, true),
-      max: view.getInt32(offset + 8, true),
-      default: view.getInt32(offset + 12, true),
+      value: view.getInt32(offset),
+      min: view.getInt32(offset + 4),
+      max: view.getInt32(offset + 8),
+      default: view.getInt32(offset + 12),
       decimalPoint: payload[offset + 16],
-      stepSize: view.getInt32(offset + 17, true),
+      stepSize: view.getInt32(offset + 17),
       unit: parseNullTerminatedString(payload.slice(offset + 21))
     }
   },
 
   [PARAM_TYPE.TEXT_SELECTION](payload, offset) {
     const view = new DataView(payload.buffer)
+    const {strValue, newOffset} = parseNullTerminatedString2(payload, offset)
+    offset = newOffset
     const value = view.getUint8(offset)
     const min = view.getUint8(offset + 1)
     const max = view.getUint8(offset + 2)
     const default_value = view.getUint8(offset + 3)
-
-    // Parse options string (null-terminated)
-    const optionsStr = parseNullTerminatedString(payload.slice(offset + 4))
-    const options = optionsStr.split(';')
+    const options = strValue.split(';')
 
     return {
       value,
@@ -181,17 +186,19 @@ const parameterParsers = {
   },
 
   [PARAM_TYPE.STRING](payload, offset) {
-    const maxLength = payload[offset]
-    const value = parseNullTerminatedString(payload.slice(offset + 1))
+    const {strValue, newOffset} = parseNullTerminatedString2(payload, offset)
+    const maxLength = payload[newOffset]
     return {
-      value,
+      value: strValue,
       maxLength
     }
   },
 
   [PARAM_TYPE.FOLDER](payload, offset) {
+    const children = payload.slice(offset, -1)
     return {
-      value: null,
+      value: '',
+      children,
       isFolder: true
     }
   },
@@ -204,9 +211,13 @@ const parameterParsers = {
   },
 
   [PARAM_TYPE.COMMAND](payload, offset) {
+    const status = payload[offset++]
+    const timeout = payload[offset++]
     return {
+      status,
+      timeout,
       value: parseNullTerminatedString(payload.slice(offset)),
-      isInfo: true
+      isCommand: true
     }
   }
 }
@@ -241,8 +252,7 @@ const handleParameterEntry = (frame) => {
       console.log('Parameter data hexdump:', Array.from(completeParameter).map(b => b.toString(16).padStart(2, '0')).join(' '))
 
       // Parse the complete parameter
-      const commonFields = parameterParsers.parseCommonFields(completeParameter)
-      const { parentFolder, dataType, name, offset: parseOffset } = commonFields
+      const { parentFolder, dataType, name, offset: parseOffset } = parameterParsers.parseCommonFields(completeParameter)
 
       // Get the appropriate parser for this data type
       const parser = parameterParsers[dataType]
@@ -280,7 +290,7 @@ const handleParameterEntry = (frame) => {
     }
 
     // Request next chunk or finish
-    if (parameters.value.length < props.parameterCount) {
+    if (parameters.value.length <= props.parameterCount) {
       requestNextChunk()
     } else {
       loading.value = false
@@ -336,8 +346,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <v-card class="mb-4">
-    <v-card-title>
+  <v-card>
+    <v-card-title class="d-flex align-center">
       {{ deviceName }} Parameters
       <v-chip class="ml-2" size="small">
         {{ parameters.length }} / {{ parameterCount }} parameters
@@ -358,14 +368,18 @@ onUnmounted(() => {
     <v-card-text>
       <v-table v-if="parameters.length > 0">
         <tbody>
-        <tr v-for="param in parameters" :key="param.name">
+        <tr v-for="(param, index) in parameters" :key="param.name">
+          <td>{{ index }}</td>
           <td>{{ param.name }}</td>
           <td>
             <template v-if="param.isFolder">
-              📁 Folder
+              📁
             </template>
             <template v-else-if="param.isInfo">
               ℹ️ {{ param.value }}
+            </template>
+            <template v-else-if="param.isCommand">
+              ▶ {{ param.value }}
             </template>
             <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
               {{ param.options[param.value] }}
@@ -379,13 +393,19 @@ onUnmounted(() => {
           </td>
           <td>{{ param.unit || '' }}</td>
           <td>
-            <template v-if="!param.isFolder && !param.isInfo">
+            <template v-if="!param.isFolder && !param.isInfo && !param.isCommand">
               <template v-if="param.type === PARAM_TYPE.TEXT_SELECTION">
                 {{ param.options.join(' | ') }}
               </template>
               <template v-else>
                 {{ param.min }} - {{ param.max }}
               </template>
+            </template>
+            <template v-else-if="param.isFolder">
+              Children: {{ param.children }}
+            </template>
+            <template v-else-if="param.isCommand">
+              Status: {{ param.status }}, Timeout: {{ param.timeout * 100 }} ms
             </template>
           </td>
           <td>

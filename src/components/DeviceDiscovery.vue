@@ -90,7 +90,7 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <v-card class="mb-4">
+    <v-card>
       <v-card-title class="d-flex align-center">
         Device Discovery
         <v-spacer></v-spacer>
@@ -98,6 +98,7 @@ onUnmounted(() => {
             :loading="scanning"
             :disabled="scanning"
             color="primary"
+            size="small"
             @click="startScan"
         >
           <v-icon start>mdi-radar</v-icon>
