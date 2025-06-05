@@ -315,8 +315,12 @@ const loadParameters = () => {
   requestNextChunk()
 }
 
-const execute = (param) => {
-  console.log('execute:', param)
+const executeCommand = (index) => {
+  console.log('execute:', index)
+}
+
+const updateParameter = (index) => {
+  console.log('updateParam:', index)
 }
 
 // Watch for device ID changes
@@ -366,13 +370,16 @@ onUnmounted(() => {
               <v-col class="text-subtitle-1">{{ param.name }}</v-col>
               <v-col class="flex">
                 <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
-                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"></VNumberInput>
+                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value" @update:model-value="updateParameter(index)"></VNumberInput>
                 </template>
                 <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
-                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"></VNumberInput>
+                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value" @update:model-value="updateParameter(index)"></VNumberInput>
                 </template>
                 <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
-                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"></VNumberInput>
+                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value" @update:model-value="updateParameter(index)"></VNumberInput>
+                </template>
+                <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
+                  <TextSelectionWidget v-model="parameters[index]" @update:model-value="updateParameter(index)"/>
                 </template>
                 <template v-else-if="param.type === PARAM_TYPE.FOLDER">
                   <v-btn color="primary" size="small" @click="folder=index">
@@ -380,22 +387,19 @@ onUnmounted(() => {
                     Enter
                   </v-btn>
                 </template>
-                <template v-else-if="param.type === PARAM_TYPE.INFO || param.type === PARAM_TYPE.STRING">
-                  {{ param.value }}
-                </template>
                 <template v-else-if="param.type === PARAM_TYPE.COMMAND">
-                  <v-btn color="secondary" size="small" @click="execute(param)">
+                  <v-btn color="secondary" size="small" @click="executeCommand(index)">
                     <v-icon start>mdi-folder</v-icon>
                     Execute
                   </v-btn>
-                </template>
-                <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                  <TextSelectionWidget v-model="parameters[index]" />
                 </template>
                 <template v-else-if="param.type === PARAM_TYPE.FLOAT">
                   {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
 <!--                  {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
 <!--                  {{ (param.stepSize / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
+                </template>
+                <template v-else-if="param.type === PARAM_TYPE.INFO || param.type === PARAM_TYPE.STRING">
+                  {{ param.value }}
                 </template>
               </v-col>
               <v-col class="align-content-center">{{ param.unit || '' }}</v-col>

@@ -1,10 +1,12 @@
 <script setup>
-import {computed} from 'vue'
+import { computed } from 'vue'
 
 const model = defineModel({
   type: Object,
   default: () => ({ options: [], value: -1 })
 })
+
+const emits = defineEmits(['update:modelValue'])
 
 const selectedItem = computed(() => {
   if (model.value && model.value.value !== -1 && model.value.options && model.value.options.length > model.value.value) {
@@ -15,7 +17,9 @@ const selectedItem = computed(() => {
 
 const handleUpdate = (newSelectedItem) => {
   model.value.value = model.value.options.indexOf(newSelectedItem);
+  emits('update:modelValue', model.value)
 }
+
 </script>
 
 <template>
