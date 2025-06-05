@@ -21,7 +21,6 @@ const props = defineProps({
 
 const CRSF_FRAMETYPE_PARAM_ENTRY = 0x2B
 const CRSF_FRAMETYPE_PARAM_READ = 0x2C
-const DATA_TYPE_FLOAT = 0x08
 
 const { sendFrame, registerFrameHandler, unregisterFrameHandler } = useSerialPort()
 const { getDeviceIdNumber } = useDeviceId()
@@ -44,19 +43,9 @@ const parseNullTerminatedString2 = (array, offset) => {
   const nullIndex = offset + array.slice(offset).findIndex(byte => byte === 0)
   const strValue = new TextDecoder().decode(array.slice(offset, nullIndex >= 0 ? nullIndex : undefined))
   const newOffset = nullIndex >= 0 ? nullIndex+1 : undefined
-  console.log('strValue:', strValue)
-  console.log('newOffset:', newOffset)
   return { strValue, newOffset }
 }
 
-
-// Helper function to parse parameter value based on type and decimal point
-const parseParameterValue = (value, type, decimalPoint) => {
-  if (type === DATA_TYPE_FLOAT) {
-    return (value / Math.pow(10, decimalPoint)).toFixed(decimalPoint)
-  }
-  return value
-}
 
 // Parameter data types
 const PARAM_TYPE = {
@@ -371,20 +360,27 @@ onUnmounted(() => {
     </v-card-title>
 
     <v-card-text>
-      <v-table v-if="parameters.length > 0">
-        <tbody>
+      <template v-if="parameters.length > 0">
           <template v-for="(param, index) in parameters" :key="param.name" >
-            <tr v-if="param.parentFolder===folder && index!==0">
-              <td>{{ index }}</td>
-              <td>{{ param.name }}</td>
-              <td>
-                <template v-if="param.type === PARAM_TYPE.FOLDER">
+            <v-row no-gutters v-if="param.parentFolder===folder && index!==0" >
+              <v-col class="text-subtitle-1">{{ param.name }}</v-col>
+              <v-col class="flex">
+                <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
+                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"></VNumberInput>
+                </template>
+                <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
+                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"></VNumberInput>
+                </template>
+                <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
+                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"></VNumberInput>
+                </template>
+                <template v-else-if="param.type === PARAM_TYPE.FOLDER">
                   <v-btn color="primary" size="small" @click="folder=index">
                     <v-icon start>mdi-folder</v-icon>
                     Enter
                   </v-btn>
                 </template>
-                <template v-else-if="param.type === PARAM_TYPE.INFO">
+                <template v-else-if="param.type === PARAM_TYPE.INFO || param.type === PARAM_TYPE.STRING">
                   {{ param.value }}
                 </template>
                 <template v-else-if="param.type === PARAM_TYPE.COMMAND">
@@ -398,41 +394,14 @@ onUnmounted(() => {
                 </template>
                 <template v-else-if="param.type === PARAM_TYPE.FLOAT">
                   {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
+<!--                  {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
+<!--                  {{ (param.stepSize / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
                 </template>
-                <template v-else>
-                  {{ param.value }}
-                </template>
-              </td>
-              <td>{{ param.unit || '' }}</td>
-              <td>
-                <template v-if="param.type === PARAM_TYPE.COMMAND">
-                  Status: {{ param.status }}, Timeout: {{ param.timeout * 100 }} ms
-                </template>
-                <template v-else-if="param.type !== PARAM_TYPE.TEXT_SELECTION">
-                  {{ param.min }} - {{ param.max }}
-                </template>
-              </td>
-              <td>
-                <template v-if="param.type === PARAM_TYPE.FLOAT">
-                  {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
-                </template>
-              </td>
-              <td>
-                <template v-if="param.type === PARAM_TYPE.FLOAT">
-                  {{ (param.stepSize / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
-                </template>
-              </td>
-            </tr>
+              </v-col>
+              <v-col class="align-content-center">{{ param.unit || '' }}</v-col>
+            </v-row>
           </template>
-        </tbody>
-        <tfoot>
-          <tr v-if="folder!==0">
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td>
+          <v-row v-if="folder!==0">
               <v-btn
                   color="primary"
                   size="small"
@@ -441,11 +410,8 @@ onUnmounted(() => {
                 <v-icon start>mdi-folder</v-icon>
                 Back
               </v-btn>
-            </td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </v-table>
+          </v-row>
+      </template>
       <v-progress-linear
           v-else-if="loading"
           indeterminate
