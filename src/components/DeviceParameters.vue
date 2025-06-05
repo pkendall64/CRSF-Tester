@@ -21,6 +21,7 @@ const props = defineProps({
 
 const CRSF_FRAMETYPE_PARAM_ENTRY = 0x2B
 const CRSF_FRAMETYPE_PARAM_READ = 0x2C
+const CRSF_FRAMETYPE_PARAM_WRITE = 0x2D
 
 const { sendFrame, registerFrameHandler, unregisterFrameHandler } = useSerialPort()
 const { getDeviceIdNumber } = useDeviceId()
@@ -32,6 +33,7 @@ const currentChunk = ref({
   paramNumber: 0,
   chunkNumber: 0
 })
+let parameterQueue = []
 
 // Helper function to parse null-terminated string from Uint8Array
 const parseNullTerminatedString = (array) => {
@@ -212,6 +214,29 @@ const parameterParsers = {
   }
 }
 
+const parameterSerializers = {
+  [PARAM_TYPE.UINT8](value) {
+    return new Uint8Array([value])
+  },
+
+  [PARAM_TYPE.INT8](value) {
+    return new Uint8Array([value])
+  },
+
+  [PARAM_TYPE.TEXT_SELECTION](value) {
+    return new Uint8Array([value])
+  },
+
+  [PARAM_TYPE.COMMAND](value) {
+    return new Uint8Array([
+      value.status,
+      value.timeout,
+      ...new TextEncoder().encode(value.value)
+    ])
+  }
+
+}
+
 // Store parameter chunks until complete
 const currentParameterChunks = ref([])
 
@@ -242,7 +267,7 @@ const handleParameterEntry = (frame) => {
       console.log('Parameter data hexdump:', Array.from(completeParameter).map(b => b.toString(16).padStart(2, '0')).join(' '))
 
       // Parse the complete parameter
-      const { parentFolder, dataType, name, offset: parseOffset } = parameterParsers.parseCommonFields(completeParameter)
+      const {parentFolder, dataType, name, offset: parseOffset} = parameterParsers.parseCommonFields(completeParameter)
 
       // Get the appropriate parser for this data type
       const parser = parameterParsers[dataType]
@@ -264,26 +289,24 @@ const handleParameterEntry = (frame) => {
       }
 
       // Add or update parameter
-      const existingIndex = parameters.value.findIndex(p => p.name === parameter.name)
-      if (existingIndex >= 0) {
-        parameters.value[existingIndex] = parameter
-      } else {
-        parameters.value.push(parameter)
-      }
+      parameters.value[currentChunk.value.paramNumber] = parameter
 
       // Clear chunks buffer for next parameter
       currentParameterChunks.value = []
 
-      // Move to next parameter
-      currentChunk.value.paramNumber++
+      // Move to next parameter of finish if none in the queue
       currentChunk.value.chunkNumber = 0
+      if (parameterQueue.length > 0) {
+        currentChunk.value.paramNumber = parameterQueue.pop()
+      } else {
+        console.log('Finished loading parameters')
+        loading.value = false
+      }
     }
 
     // Request next chunk or finish
-    if (parameters.value.length <= props.parameterCount) {
+    if (loading.value) {
       requestNextChunk()
-    } else {
-      loading.value = false
     }
   }
 }
@@ -304,12 +327,19 @@ const requestNextChunk = async () => {
 }
 
 // Start loading parameters
-const loadParameters = () => {
+const loadParameters = (all) => {
   loading.value = true
-  parameters.value = []
   currentParameterChunks.value = []
+  if (all) {
+    parameters.value = []
+    folder.value = 0
+    parameterQueue = Array.from({length: props.parameterCount}, (_, i) => i+1).reverse()
+  }
+  else {
+    parameterQueue = Array.from(parameters.value[folder.value].children).reverse()
+  }
   currentChunk.value = {
-    paramNumber: 0,
+    paramNumber: folder.value,
     chunkNumber: 0
   }
   requestNextChunk()
@@ -320,13 +350,25 @@ const executeCommand = (index) => {
 }
 
 const updateParameter = (index) => {
-  console.log('updateParam:', index)
+  const serializer = parameterSerializers[parameters.value[index].type]
+  if (serializer) {
+    const data = serializer(parameters.value[index].value)
+    const frame = {
+      type: CRSF_FRAMETYPE_PARAM_WRITE,
+      destination: props.deviceId,
+      origin: getDeviceIdNumber(),
+      payload: Array([index, ...data]).flat()
+    }
+    sendFrame(frame)
+  }
+
+  loadParameters(false)
 }
 
 // Watch for device ID changes
 watch(() => props.deviceId, (newId) => {
   if (newId) {
-    loadParameters()
+    loadParameters(true)
   }
 })
 
@@ -334,7 +376,7 @@ watch(() => props.deviceId, (newId) => {
 onMounted(() => {
   registerFrameHandler(handleParameterEntry)
   if (props.deviceId) {
-    loadParameters()
+    loadParameters(true)
   }
 })
 
@@ -356,7 +398,7 @@ onUnmounted(() => {
           :disabled="loading"
           color="primary"
           size="small"
-          @click="loadParameters"
+          @click="loadParameters(false)"
       >
         <v-icon start>mdi-refresh</v-icon>
         Reload
