@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
 import { useDeviceId } from '../composables/useDeviceId'
+import TextSelectionWidget from "@/components/TextSelectionWidget.vue";
 
 const props = defineProps({
   deviceId: {
@@ -170,19 +171,21 @@ const parameterParsers = {
   [PARAM_TYPE.TEXT_SELECTION](payload, offset) {
     const view = new DataView(payload.buffer)
     const {strValue, newOffset} = parseNullTerminatedString2(payload, offset)
+    const options = strValue.split(';')
     offset = newOffset
     const value = view.getUint8(offset)
     const min = view.getUint8(offset + 1)
     const max = view.getUint8(offset + 2)
     const default_value = view.getUint8(offset + 3)
-    const options = strValue.split(';')
+    const unit = parseNullTerminatedString2(payload, offset+4).strValue
 
     return {
       value,
       min,
       max,
       default: default_value,
-      options
+      options,
+      unit
     }
   },
 
@@ -199,15 +202,13 @@ const parameterParsers = {
     const children = payload.slice(offset, -1)
     return {
       value: '',
-      children,
-      isFolder: true
+      children
     }
   },
 
   [PARAM_TYPE.INFO](payload, offset) {
     return {
-      value: parseNullTerminatedString(payload.slice(offset)),
-      isInfo: true
+      value: parseNullTerminatedString(payload.slice(offset))
     }
   },
 
@@ -217,8 +218,7 @@ const parameterParsers = {
     return {
       status,
       timeout,
-      value: parseNullTerminatedString(payload.slice(offset)),
-      isCommand: true
+      value: parseNullTerminatedString(payload.slice(offset))
     }
   }
 }
@@ -326,6 +326,10 @@ const loadParameters = () => {
   requestNextChunk()
 }
 
+const execute = (param) => {
+  console.log('execute:', param)
+}
+
 // Watch for device ID changes
 watch(() => props.deviceId, (newId) => {
   if (newId) {
@@ -374,17 +378,23 @@ onUnmounted(() => {
               <td>{{ index }}</td>
               <td>{{ param.name }}</td>
               <td>
-                <template v-if="param.isFolder">
-                  📁
+                <template v-if="param.type === PARAM_TYPE.FOLDER">
+                  <v-btn color="primary" size="small" @click="folder=index">
+                    <v-icon start>mdi-folder</v-icon>
+                    Enter
+                  </v-btn>
                 </template>
-                <template v-else-if="param.isInfo">
-                  ℹ️ {{ param.value }}
+                <template v-else-if="param.type === PARAM_TYPE.INFO">
+                  {{ param.value }}
                 </template>
-                <template v-else-if="param.isCommand">
-                  ▶ {{ param.value }}
+                <template v-else-if="param.type === PARAM_TYPE.COMMAND">
+                  <v-btn color="secondary" size="small" @click="execute(param)">
+                    <v-icon start>mdi-folder</v-icon>
+                    Execute
+                  </v-btn>
                 </template>
                 <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                  {{ param.options[param.value] }}
+                  <TextSelectionWidget v-model="parameters[index]" />
                 </template>
                 <template v-else-if="param.type === PARAM_TYPE.FLOAT">
                   {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
@@ -395,42 +405,16 @@ onUnmounted(() => {
               </td>
               <td>{{ param.unit || '' }}</td>
               <td>
-                <template v-if="!param.isFolder && !param.isInfo && !param.isCommand">
-                  <template v-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                    {{ param.options.join(' | ') }}
-                  </template>
-                  <template v-else>
-                    {{ param.min }} - {{ param.max }}
-                  </template>
-                </template>
-                <template v-else-if="param.isFolder">
-                  Children: {{ param.children }}
-                </template>
-                <template v-else-if="param.isCommand">
+                <template v-if="param.type === PARAM_TYPE.COMMAND">
                   Status: {{ param.status }}, Timeout: {{ param.timeout * 100 }} ms
+                </template>
+                <template v-else-if="param.type !== PARAM_TYPE.TEXT_SELECTION">
+                  {{ param.min }} - {{ param.max }}
                 </template>
               </td>
               <td>
-                <template v-if="!param.isFolder && !param.isInfo">
-                  <template v-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                    {{ param.options[param.default] }}
-                  </template>
-                  <template v-else-if="param.type === PARAM_TYPE.FLOAT">
-                    {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
-                  </template>
-                  <template v-else>
-                    {{ param.default }}
-                  </template>
-                </template>
-                <template v-else-if="param.isFolder">
-                  <v-btn
-                      color="primary"
-                      size="small"
-                      @click="folder=index"
-                  >
-                    <v-icon start>mdi-folder</v-icon>
-                    Enter
-                  </v-btn>
+                <template v-if="param.type === PARAM_TYPE.FLOAT">
+                  {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
                 </template>
               </td>
               <td>
