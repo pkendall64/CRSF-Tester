@@ -1,11 +1,12 @@
 <script setup>
-import {ref, onMounted, onUnmounted} from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
+
 const { registerFrameHandler, unregisterFrameHandler } = useSerialPort()
 
 const CRSF_FRAMETYPE_RC_CHANNELS_PACKED = 0x16
 
-let channelData = ref(Array(16).fill(0))
+const channelData = ref(Array(16).fill(0))
 
 // Compute percentage for v-progress-linear
 const getPercentage = (value) => {
@@ -38,9 +39,9 @@ const handleRCFrame = (frame) => {
       let value = 0
 
       // Read up to 3 bytes to get our 11 bits
-      value = frame.payload[byteIndex]                         // First byte
-      value |= (frame.payload[byteIndex + 1] << 8)            // Second byte
-      value |= (frame.payload[byteIndex + 2] << 16)           // Third byte if needed
+      value = frame.payload[byteIndex] // First byte
+      value |= (frame.payload[byteIndex + 1] << 8) // Second byte
+      value |= (frame.payload[byteIndex + 2] << 16) // Third byte if needed
 
       // Extract 11 bits starting from current bit position
       value = (value >> bitIndex) & 0x07FF
@@ -70,17 +71,27 @@ onUnmounted(() => {
 
 <template>
   <v-card>
-    <v-card-title class="text-h6">Channel Monitor</v-card-title>
+    <v-card-title class="text-h6">
+      Channel Monitor
+    </v-card-title>
     <v-card-text class="channels-container pa-2">
-      <div v-for="(value, index) in channelData" :key="index" class="channel-row">
-        <div class="channel-label">{{ channelLabels[index] }}</div>
+      <div
+        v-for="(value, index) in channelData"
+        :key="index"
+        class="channel-row"
+      >
+        <div class="channel-label">
+          {{ channelLabels[index] }}
+        </div>
         <v-progress-linear
-            :model-value="getPercentage(value)"
-            :color="getColor(value)"
-            height="16"
-            rounded
+          :model-value="getPercentage(value)"
+          :color="getColor(value)"
+          height="16"
+          rounded
         >
-          <span class="channel-value">{{ formatValue(value) }}</span>
+          <span class="channel-value">
+            {{ formatValue(value) }}
+          </span>
         </v-progress-linear>
       </div>
     </v-card-text>
@@ -108,7 +119,7 @@ onUnmounted(() => {
 .channel-value {
   color: white;
   font-size: 0.75rem;
-  text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
 }
 
 :deep(.v-progress-linear) {

@@ -61,28 +61,14 @@ const getStatusColor = computed(() => {
       <v-app-bar-title>CRSF Tester</v-app-bar-title>
       <template v-slot:append>
         <span class="text-subtitle-2 mr-2">My Device ID:</span>
-        <v-select
-            v-model="selectedDeviceId"
-            :items="deviceIds"
-            density="compact"
-            hide-details
-            class="device-select mr-4"
-            variant="outlined"
-        />
-        <v-chip
-            :color="getStatusColor"
-            size="small"
-            class="mr-2"
-        >
+        <v-select v-model="selectedDeviceId" :items="deviceIds" density="compact" hide-details
+          class="device-select mr-4" variant="outlined" />
+        <v-chip :color="getStatusColor" size="small" class="mr-2">
           {{ getConnectionStatus }}
         </v-chip>
         <v-tooltip activator="parent" location="bottom">
           <template #activator="{ props }">
-            <v-btn
-                icon="mdi-usb-port"
-                @click="showConnectionDialog"
-                v-bind="props"
-            />
+            <v-btn icon="mdi-usb-port" @click="showConnectionDialog" v-bind="props" />
           </template>
           <span>Manage Connection</span>
         </v-tooltip>
@@ -110,34 +96,20 @@ const getStatusColor = computed(() => {
           <v-col cols="12" md="6" lg="8" class="right-column">
             <!-- Device Discovery Card -->
             <v-card class="mb-4">
-              <DeviceDiscovery v-model:selected-device="selectedDevice"/>
+              <DeviceDiscovery v-model:selected-device="selectedDevice" />
             </v-card>
             <!-- Device Parameters Component -->
-            <DeviceParameters
-                v-if="selectedDevice"
-                :device-id="selectedDevice.address"
-                :device-name="selectedDevice.name"
-                :parameter-count="selectedDevice.parametersTotal"
-            />
+            <DeviceParameters v-if="selectedDevice" :device-id="selectedDevice.address"
+              :device-name="selectedDevice.name" :parameter-count="selectedDevice.parametersTotal" />
           </v-col>
         </v-row>
       </v-container>
     </v-main>
 
     <!-- Connection Dialog -->
-    <v-dialog
-      v-model="connectionDialog"
-      persistent
-      width="auto"
-    >
-      <SerialPortConnection
-        ref="serialPort"
-        :initial-baud-rate="115200"
-        @connected="onConnected"
-        @disconnected="onDisconnected"
-        @error="onError"
-        @status-change="onStatusChange"
-      />
+    <v-dialog v-model="connectionDialog" persistent width="auto">
+      <SerialPortConnection ref="serialPort" :initial-baud-rate="115200" @connected="onConnected"
+        @disconnected="onDisconnected" @error="onError" @status-change="onStatusChange" />
     </v-dialog>
   </v-app>
 </template>
@@ -147,10 +119,12 @@ const getStatusColor = computed(() => {
   background-color: rgb(var(--v-theme-primary));
   color: white;
 }
+
 .fill-width {
   width: 100% !important;
   max-width: 100% !important;
 }
+
 .device-select {
   max-width: 250px;
 }

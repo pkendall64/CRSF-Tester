@@ -9,7 +9,7 @@ const { sendFrame, registerFrameHandler, unregisterFrameHandler, isConnected } =
 const { getDeviceIdNumber } = useDeviceId()
 const selectedDevice = defineModel(
   'selectedDevice',
-  {type:Object, default: null}
+  { type: Object, default: null }
 )
 
 // CRSF frame types
@@ -25,9 +25,9 @@ const parseNullTerminatedString = (array) => {
 // Helper function to parse 32-bit number from Uint8Array in big-endian order
 const parseUint32 = (array, offset) => {
   return (array[offset] << 24) |
-      (array[offset + 1] << 16) |
-      (array[offset + 2] << 8) |
-      (array[offset + 3])
+    (array[offset + 1] << 16) |
+    (array[offset + 2] << 8) |
+    (array[offset + 3])
 }
 
 // Handler for DEVICE_INFO responses
@@ -96,13 +96,7 @@ onUnmounted(() => {
       <v-card-title class="d-flex align-center">
         Device Discovery
         <v-spacer></v-spacer>
-        <v-btn
-            :loading="scanning"
-            :disabled="scanning"
-            color="primary"
-            size="small"
-            @click="startScan"
-        >
+        <v-btn :loading="scanning" :disabled="scanning" color="primary" size="small" @click="startScan">
           <v-icon start>mdi-radar</v-icon>
           Scan for Devices
         </v-btn>
@@ -110,32 +104,23 @@ onUnmounted(() => {
 
       <v-card-text>
         <v-list v-if="deviceList.length > 0">
-          <v-list-item
-              v-for="device in deviceList"
-              :key="device.address"
-              :title="device.name"
-              :subtitle="`ID: 0x${device.address.toString(16).padStart(2, '0')} | S/N: ${device.serialNumber} | HW: ${device.hardwareId} | FW: ${device.firmwareId} | Params: ${device.parametersTotal}`"
-              @click="selectedDevice = device"
-          >
+          <v-list-item v-for="device in deviceList" :key="device.address" :title="device.name"
+            :subtitle="`ID: 0x${device.address.toString(16).padStart(2, '0')} | S/N: ${device.serialNumber} | HW: ${device.hardwareId} | FW: ${device.firmwareId} | Params: ${device.parametersTotal}`"
+            @click="selectedDevice = device">
             <template v-slot:prepend>
               <v-icon>mdi-radio-tower</v-icon>
             </template>
             <template v-slot:append>
-              <v-chip
-                  size="small"
-                  :color="!isConnected ? 'error' : selectedDevice?.address === device.address ? 'primary' : 'success'"
-              >
+              <v-chip size="small"
+                :color="!isConnected ? 'error' : selectedDevice?.address === device.address ? 'primary' : 'success'">
                 {{ !isConnected ? 'Offline' : selectedDevice?.address === device.address ? 'Selected' : 'Online' }}
               </v-chip>
             </template>
           </v-list-item>
         </v-list>
 
-        <v-alert
-            v-else
-            type="info"
-            text="No devices found. Click 'Scan for Devices' to search for CRSF devices."
-        ></v-alert>
+        <v-alert v-else type="info"
+          text="No devices found. Click 'Scan for Devices' to search for CRSF devices."></v-alert>
       </v-card-text>
     </v-card>
   </div>

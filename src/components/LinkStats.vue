@@ -71,7 +71,7 @@ const formatRSSI = (rssi) => {
   return `-${rssi} dBm`
 }
 
-const getRFProfileName = (profile) => {
+const getRFModeName = (profile) => {
   return RF_PROFILE_NAMES[profile] || 'Unknown'
 }
 
@@ -150,7 +150,7 @@ onUnmounted(() => {
                 Uplink
                 <v-spacer></v-spacer>
                 <v-chip size="small">
-                  {{ getRFProfileName(linkStats.uplink.rfProfile) }}
+                  {{ getRFModeName(linkStats.uplink.rfProfile) }}
                 </v-chip>
               </v-card-title>
               <v-card-text>
@@ -163,10 +163,7 @@ onUnmounted(() => {
                     </template>
                     <v-list-item-title>RSSI Ant 1</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip
-                          :color="getRSSIColor(linkStats.uplink.rssiAnt1)"
-                          size="small"
-                      >
+                      <v-chip :color="getRSSIColor(linkStats.uplink.rssiAnt1)" size="small">
                         {{ formatRSSI(linkStats.uplink.rssiAnt1) }}
                       </v-chip>
                     </template>
@@ -180,10 +177,7 @@ onUnmounted(() => {
                     </template>
                     <v-list-item-title>RSSI Ant 2</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip
-                          :color="getRSSIColor(linkStats.uplink.rssiAnt2)"
-                          size="small"
-                      >
+                      <v-chip :color="getRSSIColor(linkStats.uplink.rssiAnt2)" size="small">
                         {{ formatRSSI(linkStats.uplink.rssiAnt2) }}
                       </v-chip>
                     </template>
@@ -197,10 +191,7 @@ onUnmounted(() => {
                     </template>
                     <v-list-item-title>Link Quality</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip
-                          :color="getLQColor(linkStats.uplink.lq)"
-                          size="small"
-                      >
+                      <v-chip :color="getLQColor(linkStats.uplink.lq)" size="small">
                         {{ linkStats.uplink.lq }}%
                       </v-chip>
                     </template>
@@ -262,10 +253,7 @@ onUnmounted(() => {
                     </template>
                     <v-list-item-title>RSSI</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip
-                          :color="getRSSIColor(linkStats.downlink.rssi)"
-                          size="small"
-                      >
+                      <v-chip :color="getRSSIColor(linkStats.downlink.rssi)" size="small">
                         {{ formatRSSI(linkStats.downlink.rssi) }}
                       </v-chip>
                     </template>
@@ -279,10 +267,7 @@ onUnmounted(() => {
                     </template>
                     <v-list-item-title>Link Quality</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip
-                          :color="getLQColor(linkStats.downlink.lq)"
-                          size="small"
-                      >
+                      <v-chip :color="getLQColor(linkStats.downlink.lq)" size="small">
                         {{ linkStats.downlink.lq }}%
                       </v-chip>
                     </template>

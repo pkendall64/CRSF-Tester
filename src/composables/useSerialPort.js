@@ -54,8 +54,8 @@ export function useSerialPort() {
 
     // Convert to hex string with formatting
     let hexString = Array.from(frameBuffer)
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join(' ')
+      .map(byte => byte.toString(16).padStart(2, '0'))
+      .join(' ')
 
     // Add structure markers
     const parts = {
@@ -93,7 +93,7 @@ export function useSerialPort() {
     frameBuffer[index++] = frame.origin
     frameBuffer.set(frame.payload, index)
 
-    const crc = calculateCRC(frameBuffer.slice(2, frameBuffer.length-1))
+    const crc = calculateCRC(frameBuffer.slice(2, frameBuffer.length - 1))
     frameBuffer[frameBuffer.length - 1] = crc
 
     // Use the new logging function
@@ -257,17 +257,17 @@ export function useSerialPort() {
 
   const getPortDescription = () => {
     if (!portInfo.value) return 'Unknown port'
-    
+
     const { usbVendorId, usbProductId } = portInfo.value
     let description = []
-    
+
     if (usbVendorId) {
       description.push(`VID: ${usbVendorId.toString(16).padStart(4, '0')}`)
     }
     if (usbProductId) {
       description.push(`PID: ${usbProductId.toString(16).padStart(4, '0')}`)
     }
-    
+
     return description.length ? `Port (${description.join(', ')})` : 'Port'
   }
 

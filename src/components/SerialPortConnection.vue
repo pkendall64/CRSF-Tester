@@ -4,7 +4,7 @@ import { useSerialPort } from '../composables/useSerialPort'
 
 const emit = defineEmits(['connected', 'disconnected', 'error', 'status-change'])
 
-const baudRates = [9600, 19200, 38400, 57600, 115200, 420000]
+const baudRates = [9600, 19200, 38400, 57600, 115200, 420000, 460800, 921600]
 const isDialogOpen = ref(false)
 
 const {

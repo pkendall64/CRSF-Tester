@@ -23,10 +23,6 @@ const handleUpdate = (newSelectedItem) => {
 </script>
 
 <template>
-  <v-select
-      :items="model.options"
-      :model-value="selectedItem"
-      @update:model-value="handleUpdate"
-      v-bind="$attrs"
-  ></v-select>
+  <v-select :items="model.options" :model-value="selectedItem" @update:model-value="handleUpdate"
+    v-bind="$attrs"></v-select>
 </template>

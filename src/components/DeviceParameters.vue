@@ -44,7 +44,7 @@ const parseNullTerminatedString = (array) => {
 const parseNullTerminatedString2 = (array, offset) => {
   const nullIndex = offset + array.slice(offset).findIndex(byte => byte === 0)
   const strValue = new TextDecoder().decode(array.slice(offset, nullIndex >= 0 ? nullIndex : undefined))
-  const newOffset = nullIndex >= 0 ? nullIndex+1 : undefined
+  const newOffset = nullIndex >= 0 ? nullIndex + 1 : undefined
   return { strValue, newOffset }
 }
 
@@ -73,7 +73,7 @@ const parameterParsers = {
     const parentFolder = payload[offset++]
     const dataType = payload[offset++] & 0x3F
 
-    const {strValue, newOffset} = parseNullTerminatedString2(payload, 2)
+    const { strValue, newOffset } = parseNullTerminatedString2(payload, 2)
     return {
       parentFolder,
       dataType,
@@ -161,14 +161,14 @@ const parameterParsers = {
 
   [PARAM_TYPE.TEXT_SELECTION](payload, offset) {
     const view = new DataView(payload.buffer)
-    const {strValue, newOffset} = parseNullTerminatedString2(payload, offset)
+    const { strValue, newOffset } = parseNullTerminatedString2(payload, offset)
     const options = strValue.split(';')
     offset = newOffset
     const value = view.getUint8(offset)
     const min = view.getUint8(offset + 1)
     const max = view.getUint8(offset + 2)
     const default_value = view.getUint8(offset + 3)
-    const unit = parseNullTerminatedString2(payload, offset+4).strValue
+    const unit = parseNullTerminatedString2(payload, offset + 4).strValue
 
     return {
       value,
@@ -181,7 +181,7 @@ const parameterParsers = {
   },
 
   [PARAM_TYPE.STRING](payload, offset) {
-    const {strValue, newOffset} = parseNullTerminatedString2(payload, offset)
+    const { strValue, newOffset } = parseNullTerminatedString2(payload, offset)
     const maxLength = payload[newOffset]
     return {
       value: strValue,
@@ -267,7 +267,7 @@ const handleParameterEntry = (frame) => {
       console.log('Parameter data hexdump:', Array.from(completeParameter).map(b => b.toString(16).padStart(2, '0')).join(' '))
 
       // Parse the complete parameter
-      const {parentFolder, dataType, name, offset: parseOffset} = parameterParsers.parseCommonFields(completeParameter)
+      const { parentFolder, dataType, name, offset: parseOffset } = parameterParsers.parseCommonFields(completeParameter)
 
       // Get the appropriate parser for this data type
       const parser = parameterParsers[dataType]
@@ -333,7 +333,7 @@ const loadParameters = (all) => {
   if (all) {
     parameters.value = []
     folder.value = 0
-    parameterQueue = Array.from({length: props.parameterCount}, (_, i) => i+1).reverse()
+    parameterQueue = Array.from({ length: props.parameterCount }, (_, i) => i + 1).reverse()
   }
   else {
     parameterQueue = Array.from(parameters.value[folder.value].children).reverse()
@@ -390,16 +390,10 @@ onUnmounted(() => {
     <v-card-title class="d-flex align-center">
       {{ deviceName }} Parameters
       <v-chip class="ml-2" size="small">
-        {{ parameters.length > 0 ? parameters.length -1 : 0 }} / {{ parameterCount }} parameters
+        {{ parameters.length > 0 ? parameters.length - 1 : 0 }} / {{ parameterCount }} parameters
       </v-chip>
       <v-spacer></v-spacer>
-      <v-btn
-          :loading="loading"
-          :disabled="loading"
-          color="primary"
-          size="small"
-          @click="loadParameters(false)"
-      >
+      <v-btn :loading="loading" :disabled="loading" color="primary" size="small" @click="loadParameters(false)">
         <v-icon start>mdi-refresh</v-icon>
         Reload
       </v-btn>
@@ -407,67 +401,58 @@ onUnmounted(() => {
 
     <v-card-text>
       <template v-if="parameters.length > 0">
-          <template v-for="(param, index) in parameters" :key="param.name" >
-            <v-row no-gutters v-if="param.parentFolder===folder && index!==0" >
-              <v-col class="text-subtitle-1">{{ param.name }}</v-col>
-              <v-col class="flex">
-                <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
-                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value" @update:model-value="updateParameter(index)"></VNumberInput>
-                </template>
-                <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
-                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value" @update:model-value="updateParameter(index)"></VNumberInput>
-                </template>
-                <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
-                  <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value" @update:model-value="updateParameter(index)"></VNumberInput>
-                </template>
-                <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                  <TextSelectionWidget v-model="parameters[index]" @update:model-value="updateParameter(index)"/>
-                </template>
-                <template v-else-if="param.type === PARAM_TYPE.FOLDER">
-                  <v-btn color="primary" size="small" @click="folder=index">
-                    <v-icon start>mdi-folder</v-icon>
-                    Enter
-                  </v-btn>
-                </template>
-                <template v-else-if="param.type === PARAM_TYPE.COMMAND">
-                  <v-btn color="secondary" size="small" @click="executeCommand(index)">
-                    <v-icon start>mdi-folder</v-icon>
-                    Execute
-                  </v-btn>
-                </template>
-                <template v-else-if="param.type === PARAM_TYPE.FLOAT">
-                  {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
-<!--                  {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
-<!--                  {{ (param.stepSize / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
-                </template>
-                <template v-else-if="param.type === PARAM_TYPE.INFO || param.type === PARAM_TYPE.STRING">
-                  {{ param.value }}
-                </template>
-              </v-col>
-              <v-col class="align-content-center">{{ param.unit || '' }}</v-col>
-            </v-row>
-          </template>
-          <v-row v-if="folder!==0">
-              <v-btn
-                  color="primary"
-                  size="small"
-                  @click="folder=parameters[folder].parentFolder"
-              >
-                <v-icon start>mdi-folder</v-icon>
-                Back
-              </v-btn>
+        <template v-for="(param, index) in parameters" :key="param.name">
+          <v-row no-gutters v-if="param.parentFolder === folder && index !== 0">
+            <v-col class="text-subtitle-1">{{ param.name }}</v-col>
+            <v-col class="flex">
+              <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
+                <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"
+                  @update:model-value="updateParameter(index)"></VNumberInput>
+              </template>
+              <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
+                <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"
+                  @update:model-value="updateParameter(index)"></VNumberInput>
+              </template>
+              <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
+                <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"
+                  @update:model-value="updateParameter(index)"></VNumberInput>
+              </template>
+              <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
+                <TextSelectionWidget v-model="parameters[index]" @update:model-value="updateParameter(index)" />
+              </template>
+              <template v-else-if="param.type === PARAM_TYPE.FOLDER">
+                <v-btn color="primary" size="small" @click="folder = index">
+                  <v-icon start>mdi-folder</v-icon>
+                  Enter
+                </v-btn>
+              </template>
+              <template v-else-if="param.type === PARAM_TYPE.COMMAND">
+                <v-btn color="secondary" size="small" @click="executeCommand(index)">
+                  <v-icon start>mdi-folder</v-icon>
+                  Execute
+                </v-btn>
+              </template>
+              <template v-else-if="param.type === PARAM_TYPE.FLOAT">
+                {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
+                <!--                  {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
+                <!--                  {{ (param.stepSize / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
+              </template>
+              <template v-else-if="param.type === PARAM_TYPE.INFO || param.type === PARAM_TYPE.STRING">
+                {{ param.value }}
+              </template>
+            </v-col>
+            <v-col class="align-content-center">{{ param.unit || '' }}</v-col>
           </v-row>
+        </template>
+        <v-row v-if="folder !== 0">
+          <v-btn color="primary" size="small" @click="folder = parameters[folder].parentFolder">
+            <v-icon start>mdi-folder</v-icon>
+            Back
+          </v-btn>
+        </v-row>
       </template>
-      <v-progress-linear
-          v-else-if="loading"
-          indeterminate
-          color="primary"
-      ></v-progress-linear>
-      <v-alert
-          v-else
-          type="info"
-          text="No parameters loaded"
-      ></v-alert>
+      <v-progress-linear v-else-if="loading" indeterminate color="primary"></v-progress-linear>
+      <v-alert v-else type="info" text="No parameters loaded"></v-alert>
     </v-card-text>
   </v-card>
 </template>
