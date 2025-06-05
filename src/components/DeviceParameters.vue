@@ -26,6 +26,7 @@ const { sendFrame, registerFrameHandler, unregisterFrameHandler } = useSerialPor
 const { getDeviceIdNumber } = useDeviceId()
 
 const parameters = ref([])
+const folder = ref(0)
 const loading = ref(false)
 const currentChunk = ref({
   paramNumber: 0,
@@ -350,7 +351,7 @@ onUnmounted(() => {
     <v-card-title class="d-flex align-center">
       {{ deviceName }} Parameters
       <v-chip class="ml-2" size="small">
-        {{ parameters.length }} / {{ parameterCount }} parameters
+        {{ parameters.length > 0 ? parameters.length -1 : 0 }} / {{ parameterCount }} parameters
       </v-chip>
       <v-spacer></v-spacer>
       <v-btn
@@ -368,66 +369,98 @@ onUnmounted(() => {
     <v-card-text>
       <v-table v-if="parameters.length > 0">
         <tbody>
-        <tr v-for="(param, index) in parameters" :key="param.name">
-          <td>{{ index }}</td>
-          <td>{{ param.name }}</td>
-          <td>
-            <template v-if="param.isFolder">
-              📁
-            </template>
-            <template v-else-if="param.isInfo">
-              ℹ️ {{ param.value }}
-            </template>
-            <template v-else-if="param.isCommand">
-              ▶ {{ param.value }}
-            </template>
-            <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-              {{ param.options[param.value] }}
-            </template>
-            <template v-else-if="param.type === PARAM_TYPE.FLOAT">
-              {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
-            </template>
-            <template v-else>
-              {{ param.value }}
-            </template>
-          </td>
-          <td>{{ param.unit || '' }}</td>
-          <td>
-            <template v-if="!param.isFolder && !param.isInfo && !param.isCommand">
-              <template v-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                {{ param.options.join(' | ') }}
-              </template>
-              <template v-else>
-                {{ param.min }} - {{ param.max }}
-              </template>
-            </template>
-            <template v-else-if="param.isFolder">
-              Children: {{ param.children }}
-            </template>
-            <template v-else-if="param.isCommand">
-              Status: {{ param.status }}, Timeout: {{ param.timeout * 100 }} ms
-            </template>
-          </td>
-          <td>
-            <template v-if="!param.isFolder && !param.isInfo">
-              <template v-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                {{ param.options[param.default] }}
-              </template>
-              <template v-else-if="param.type === PARAM_TYPE.FLOAT">
-                {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
-              </template>
-              <template v-else>
-                {{ param.default }}
-              </template>
-            </template>
-          </td>
-          <td>
-            <template v-if="param.type === PARAM_TYPE.FLOAT">
-              {{ (param.stepSize / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
-            </template>
-          </td>
-        </tr>
+          <template v-for="(param, index) in parameters" :key="param.name" >
+            <tr v-if="param.parentFolder===folder && index!==0">
+              <td>{{ index }}</td>
+              <td>{{ param.name }}</td>
+              <td>
+                <template v-if="param.isFolder">
+                  📁
+                </template>
+                <template v-else-if="param.isInfo">
+                  ℹ️ {{ param.value }}
+                </template>
+                <template v-else-if="param.isCommand">
+                  ▶ {{ param.value }}
+                </template>
+                <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
+                  {{ param.options[param.value] }}
+                </template>
+                <template v-else-if="param.type === PARAM_TYPE.FLOAT">
+                  {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
+                </template>
+                <template v-else>
+                  {{ param.value }}
+                </template>
+              </td>
+              <td>{{ param.unit || '' }}</td>
+              <td>
+                <template v-if="!param.isFolder && !param.isInfo && !param.isCommand">
+                  <template v-if="param.type === PARAM_TYPE.TEXT_SELECTION">
+                    {{ param.options.join(' | ') }}
+                  </template>
+                  <template v-else>
+                    {{ param.min }} - {{ param.max }}
+                  </template>
+                </template>
+                <template v-else-if="param.isFolder">
+                  Children: {{ param.children }}
+                </template>
+                <template v-else-if="param.isCommand">
+                  Status: {{ param.status }}, Timeout: {{ param.timeout * 100 }} ms
+                </template>
+              </td>
+              <td>
+                <template v-if="!param.isFolder && !param.isInfo">
+                  <template v-if="param.type === PARAM_TYPE.TEXT_SELECTION">
+                    {{ param.options[param.default] }}
+                  </template>
+                  <template v-else-if="param.type === PARAM_TYPE.FLOAT">
+                    {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
+                  </template>
+                  <template v-else>
+                    {{ param.default }}
+                  </template>
+                </template>
+                <template v-else-if="param.isFolder">
+                  <v-btn
+                      color="primary"
+                      size="small"
+                      @click="folder=index"
+                  >
+                    <v-icon start>mdi-folder</v-icon>
+                    Enter
+                  </v-btn>
+                </template>
+              </td>
+              <td>
+                <template v-if="param.type === PARAM_TYPE.FLOAT">
+                  {{ (param.stepSize / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
+                </template>
+              </td>
+            </tr>
+          </template>
         </tbody>
+        <tfoot>
+          <tr v-if="folder!==0">
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>
+              <v-btn
+                  color="primary"
+                  size="small"
+                  @click="folder=parameters[folder].parentFolder"
+              >
+                <v-icon start>mdi-folder</v-icon>
+                Back
+              </v-btn>
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
       </v-table>
       <v-progress-linear
           v-else-if="loading"
