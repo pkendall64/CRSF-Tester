@@ -65,6 +65,8 @@ const linkStats = ref({
 })
 
 const lastUpdate = ref(new Date())
+const isFailsafe = ref(false)
+let failsafeTimer = null
 
 // Format RSSI for display (-dBm)
 const formatRSSI = (rssi) => {
@@ -93,6 +95,16 @@ const getRSSIColor = (rssi) => {
   return 'success'
 }
 
+const resetFailsafeTimer = () => {
+  if (failsafeTimer) {
+    clearTimeout(failsafeTimer)
+  }
+  isFailsafe.value = false
+  failsafeTimer = setTimeout(() => {
+    isFailsafe.value = true
+  }, 1000)
+}
+
 // Handle incoming link statistics frames
 const handleLinkStats = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_LINK_STATISTICS) {
@@ -117,16 +129,21 @@ const handleLinkStats = (frame) => {
     }
 
     lastUpdate.value = new Date()
+    resetFailsafeTimer()
   }
 }
 
 // Register and unregister frame handler
 onMounted(() => {
   registerFrameHandler(handleLinkStats)
+  resetFailsafeTimer()
 })
 
 onUnmounted(() => {
   unregisterFrameHandler(handleLinkStats)
+  if (failsafeTimer) {
+    clearTimeout(failsafeTimer)
+  }
 })
 </script>
 
@@ -135,8 +152,8 @@ onUnmounted(() => {
     <v-card-title class="text-h6">
       Link Statistics
       <v-spacer></v-spacer>
-      <v-chip size="small" color="primary">
-        Last update: {{ lastUpdate.toLocaleTimeString() }}
+      <v-chip size="small" :color="isFailsafe ? 'error' : 'primary'">
+        {{ isFailsafe ? 'FAILSAFE' : `Last update: ${lastUpdate.toLocaleTimeString()}` }}
       </v-chip>
     </v-card-title>
 
@@ -157,80 +174,84 @@ onUnmounted(() => {
                 <v-list density="compact">
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon :color="getRSSIColor(linkStats.uplink.rssiAnt1)">
+                      <v-icon :color="isFailsafe ? 'error' : getRSSIColor(linkStats.uplink.rssiAnt1)">
                         mdi-antenna
                       </v-icon>
                     </template>
                     <v-list-item-title>RSSI Ant 1</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip :color="getRSSIColor(linkStats.uplink.rssiAnt1)" size="small">
-                        {{ formatRSSI(linkStats.uplink.rssiAnt1) }}
+                      <v-chip :color="isFailsafe ? 'error' : getRSSIColor(linkStats.uplink.rssiAnt1)" size="small">
+                        {{ isFailsafe ? '---' : formatRSSI(linkStats.uplink.rssiAnt1) }}
                       </v-chip>
                     </template>
                   </v-list-item>
 
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon :color="getRSSIColor(linkStats.uplink.rssiAnt2)">
+                      <v-icon :color="isFailsafe ? 'error' : getRSSIColor(linkStats.uplink.rssiAnt2)">
                         mdi-antenna
                       </v-icon>
                     </template>
                     <v-list-item-title>RSSI Ant 2</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip :color="getRSSIColor(linkStats.uplink.rssiAnt2)" size="small">
-                        {{ formatRSSI(linkStats.uplink.rssiAnt2) }}
+                      <v-chip :color="isFailsafe ? 'error' : getRSSIColor(linkStats.uplink.rssiAnt2)" size="small">
+                        {{ isFailsafe ? '---' : formatRSSI(linkStats.uplink.rssiAnt2) }}
                       </v-chip>
                     </template>
                   </v-list-item>
 
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon :color="getLQColor(linkStats.uplink.lq)">
+                      <v-icon :color="isFailsafe ? 'error' : getLQColor(linkStats.uplink.lq)">
                         mdi-link
                       </v-icon>
                     </template>
                     <v-list-item-title>Link Quality</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip :color="getLQColor(linkStats.uplink.lq)" size="small">
-                        {{ linkStats.uplink.lq }}%
+                      <v-chip :color="isFailsafe ? 'error' : getLQColor(linkStats.uplink.lq)" size="small">
+                        {{ isFailsafe ? '---' : `${linkStats.uplink.lq}%` }}
                       </v-chip>
                     </template>
                   </v-list-item>
 
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon>mdi-sine-wave</v-icon>
+                      <v-icon :color="isFailsafe ? 'error' : ''">
+                        mdi-sine-wave
+                      </v-icon>
                     </template>
                     <v-list-item-title>SNR</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip size="small">
-                        {{ linkStats.uplink.snr }} dB
+                      <v-chip :color="isFailsafe ? 'error' : ''" size="small">
+                        {{ isFailsafe ? '---' : `${linkStats.uplink.snr} dB` }}
                       </v-chip>
                     </template>
                   </v-list-item>
 
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon :color="linkStats.uplink.activeAntenna === 1 ? 'primary' : ''">
+                      <v-icon :color="isFailsafe ? 'error' : linkStats.uplink.activeAntenna === 1 ? 'primary' : ''">
                         mdi-antenna
                       </v-icon>
                     </template>
                     <v-list-item-title>Active Antenna</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip size="small" :color="linkStats.uplink.activeAntenna === 1 ? 'primary' : ''">
-                        {{ linkStats.uplink.activeAntenna }}
+                      <v-chip size="small" :color="isFailsafe ? 'error' : linkStats.uplink.activeAntenna === 1 ? 'primary' : ''">
+                        {{ isFailsafe ? '---' : linkStats.uplink.activeAntenna }}
                       </v-chip>
                     </template>
                   </v-list-item>
 
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon>mdi-transmission-tower</v-icon>
+                      <v-icon :color="isFailsafe ? 'error' : ''">
+                        mdi-transmission-tower
+                      </v-icon>
                     </template>
                     <v-list-item-title>TX Power</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip size="small">
-                        {{ getRFPower(linkStats.uplink.rfPower) }} mW
+                      <v-chip :color="isFailsafe ? 'error' : ''" size="small">
+                        {{ isFailsafe ? '---' : `${getRFPower(linkStats.uplink.rfPower)} mW` }}
                       </v-chip>
                     </template>
                   </v-list-item>
@@ -247,40 +268,42 @@ onUnmounted(() => {
                 <v-list density="compact">
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon :color="getRSSIColor(linkStats.downlink.rssi)">
+                      <v-icon :color="isFailsafe ? 'error' : getRSSIColor(linkStats.downlink.rssi)">
                         mdi-signal
                       </v-icon>
                     </template>
                     <v-list-item-title>RSSI</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip :color="getRSSIColor(linkStats.downlink.rssi)" size="small">
-                        {{ formatRSSI(linkStats.downlink.rssi) }}
+                      <v-chip :color="isFailsafe ? 'error' : getRSSIColor(linkStats.downlink.rssi)" size="small">
+                        {{ isFailsafe ? '---' : formatRSSI(linkStats.downlink.rssi) }}
                       </v-chip>
                     </template>
                   </v-list-item>
 
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon :color="getLQColor(linkStats.downlink.lq)">
+                      <v-icon :color="isFailsafe ? 'error' : getLQColor(linkStats.downlink.lq)">
                         mdi-link
                       </v-icon>
                     </template>
                     <v-list-item-title>Link Quality</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip :color="getLQColor(linkStats.downlink.lq)" size="small">
-                        {{ linkStats.downlink.lq }}%
+                      <v-chip :color="isFailsafe ? 'error' : getLQColor(linkStats.downlink.lq)" size="small">
+                        {{ isFailsafe ? '---' : `${linkStats.downlink.lq}%` }}
                       </v-chip>
                     </template>
                   </v-list-item>
 
                   <v-list-item>
                     <template v-slot:prepend>
-                      <v-icon>mdi-sine-wave</v-icon>
+                      <v-icon :color="isFailsafe ? 'error' : ''">
+                        mdi-sine-wave
+                      </v-icon>
                     </template>
                     <v-list-item-title>SNR</v-list-item-title>
                     <template v-slot:append>
-                      <v-chip size="small">
-                        {{ linkStats.downlink.snr }} dB
+                      <v-chip :color="isFailsafe ? 'error' : ''" size="small">
+                        {{ isFailsafe ? '---' : `${linkStats.downlink.snr} dB` }}
                       </v-chip>
                     </template>
                   </v-list-item>

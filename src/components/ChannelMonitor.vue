@@ -4,9 +4,19 @@ import { useSerialPort } from '../composables/useSerialPort'
 
 const { registerFrameHandler, unregisterFrameHandler } = useSerialPort()
 
+const props = defineProps({
+  show: {
+    type: Boolean,
+    default: false
+  }
+})
+
+const emit = defineEmits(['update:show'])
+
 const CRSF_FRAMETYPE_RC_CHANNELS_PACKED = 0x16
 
 const channelData = ref(Array(16).fill(0))
+let failsafeTimer = null
 
 // Compute percentage for v-progress-linear
 const getPercentage = (value) => {
@@ -26,6 +36,16 @@ const getColor = (value) => {
   // if (value < 682) return 'red' // First third
   // if (value < 1365) return 'orange' // Second third
   return 'green' // Last third
+}
+
+const resetFailsafeTimer = () => {
+  if (failsafeTimer) {
+    clearTimeout(failsafeTimer)
+  }
+  emit('update:show', true)
+  failsafeTimer = setTimeout(() => {
+    emit('update:show', false)
+  }, 1000)
 }
 
 const handleRCFrame = (frame) => {
@@ -56,16 +76,21 @@ const handleRCFrame = (frame) => {
 
     // Update channel values
     channelData.value = channels
+    resetFailsafeTimer()
   }
 }
 
 // Register and unregister frame handler
 onMounted(() => {
   registerFrameHandler(handleRCFrame)
+  resetFailsafeTimer()
 })
 
 onUnmounted(() => {
   unregisterFrameHandler(handleRCFrame)
+  if (failsafeTimer) {
+    clearTimeout(failsafeTimer)
+  }
 })
 </script>
 

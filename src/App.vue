@@ -7,11 +7,18 @@ import ChannelMonitor from "@/components/ChannelMonitor.vue";
 import DeviceDiscovery from "@/components/DeviceDiscovery.vue"
 import LinkStats from "@/components/LinkStats.vue";
 import DeviceParameters from "@/components/DeviceParameters.vue";
+import GpsMonitor from './components/GPS.vue'
+import AttitudeMonitor from './components/Attitude.vue'
 
 const connectionDialog = ref(true)
 const { isConnected } = useSerialPort()
 const { selectedDeviceId } = useDeviceId()
 const selectedDevice = ref(null)
+const showAttitude = ref(false)
+const showGps = ref(false)
+const showChannels = ref(false)
+const showLinkStats = ref(false)
+const showDeviceDiscovery = ref(false)
 
 // Device ID options
 const deviceIds = [
@@ -87,8 +94,8 @@ const getStatusColor = computed(() => {
             </v-card>
 
             <!-- Channel Monitor Card -->
-            <v-card>
-              <ChannelMonitor />
+            <v-card v-show="showChannels">
+              <ChannelMonitor v-model:show="showChannels" />
             </v-card>
           </v-col>
 
@@ -101,6 +108,17 @@ const getStatusColor = computed(() => {
             <!-- Device Parameters Component -->
             <DeviceParameters v-if="selectedDevice" :device-id="selectedDevice.address"
               :device-name="selectedDevice.name" :parameter-count="selectedDevice.parametersTotal" />
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col v-show="showGps" cols="12" md="4" lg="3" class="left-column">
+            <GpsMonitor v-model:show="showGps" />
+          </v-col>
+          <v-col v-show="showAttitude" cols="12" md="4" lg="3" class="left-column">
+            <AttitudeMonitor v-model:show="showAttitude" />
+          </v-col>
+          <v-col v-show="showGps" cols="12" md="4" lg="3" class="left-column">
+            <GpsMonitor v-model:show="showGps" />
           </v-col>
         </v-row>
       </v-container>
