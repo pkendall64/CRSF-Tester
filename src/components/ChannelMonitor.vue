@@ -62,7 +62,9 @@ const handleRCFrame = (frame) => {
       // Read up to 3 bytes to get our 11 bits
       value = view.getUint8(byteIndex) // First byte
       value |= (view.getUint8(byteIndex + 1) << 8) // Second byte
-      value |= (view.getUint8(byteIndex + 2) << 16) // Third byte if needed
+      if (bitIndex > 5) { // Only need third byte if we're more than 5 bits into the second byte
+        value |= (view.getUint8(byteIndex + 2) << 16) // Third byte if needed
+      }
 
       // Extract 11 bits starting from current bit position
       value = (value >> bitIndex) & 0x07FF
