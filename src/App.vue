@@ -85,8 +85,8 @@ const getStatusColor = computed(() => {
     </v-app-bar>
 
     <!-- Main Content -->
-    <v-main bg-color="#f5f5f5" class="fill-width">
-      <v-container class="pa-2 main-container" fluid>
+    <v-main class="bg-grey-lighten-3">
+      <v-container class="mt-4 main-container" fluid>
         <v-row>
           <!-- Left Column -->
           <v-col cols="12" md="6" lg="4" class="left-column">
