@@ -98,8 +98,8 @@ export function useSerialPort() {
 
     // Use the new logging function
     const hexLog = frameToHexString(frame)
-    console.log('Sending frame:', hexLog.formatted)
-    console.log('Frame parts:', hexLog.parts)
+    // console.log('Sending frame:', hexLog.formatted)
+    // console.log('Frame parts:', hexLog.parts)
 
     try {
       await writer.value.write(frameBuffer)
@@ -155,8 +155,8 @@ export function useSerialPort() {
 
         // Log received frame
         const hexLog = frameToHexString(frame)
-        console.log('Received frame:', hexLog.formatted)
-        console.log('Frame parts:', hexLog.parts)
+        // console.log('Received frame:', hexLog.formatted)
+        // console.log('Frame parts:', hexLog.parts)
 
         // Notify all registered handlers
         frameHandlers.value.forEach(handler => {

@@ -10,6 +10,7 @@ import DeviceParameters from "@/components/DeviceParameters.vue";
 import GpsMonitor from './components/GPS.vue'
 import AttitudeMonitor from './components/Attitude.vue'
 import BatterySensor from './components/BatterySensor.vue'
+import Attitude3D from './components/Attitude3D.vue'
 
 const connectionDialog = ref(true)
 const { isConnected } = useSerialPort()
@@ -21,6 +22,7 @@ const showChannels = ref(false)
 const showLinkStats = ref(false)
 const showDeviceDiscovery = ref(false)
 const showBattery = ref(false)
+const showAttitude3D = ref(false)
 
 // Device ID options
 const deviceIds = [
@@ -115,6 +117,9 @@ const getStatusColor = computed(() => {
         <v-row>
           <v-col v-show="showBattery" cols="12" sm="6" md="4">
             <BatterySensor v-model:show="showBattery" />
+          </v-col>
+          <v-col v-show="showAttitude3D" cols="12" md="6">
+            <Attitude3D v-model:show="showAttitude3D" />
           </v-col>
           <v-col v-show="showAttitude" cols="12" md="4" lg="3" class="left-column">
             <AttitudeMonitor v-model:show="showAttitude" />
