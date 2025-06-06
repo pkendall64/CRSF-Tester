@@ -70,7 +70,7 @@ let failsafeTimer = null
 
 // Format RSSI for display (-dBm)
 const formatRSSI = (rssi) => {
-  return `-${rssi} dBm`
+  return `${rssi} dBm`
 }
 
 const getRFModeName = (profile) => {
@@ -105,6 +105,13 @@ const resetFailsafeTimer = () => {
   }, 1000)
 }
 
+const convertRSSI = (rssi) => {
+  if (rssi < 0) {
+    return rssi
+  }
+  return rssi - 256 // dodgy hack for TX side of things!
+}
+
 // Handle incoming link statistics frames
 const handleLinkStats = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_LINK_STATISTICS) {
@@ -113,8 +120,8 @@ const handleLinkStats = (frame) => {
     // Update link statistics
     linkStats.value = {
       uplink: {
-        rssiAnt1: frame.payload[0],
-        rssiAnt2: frame.payload[1],
+        rssiAnt1: convertRSSI(frame.payload[0]),
+        rssiAnt2: convertRSSI(frame.payload[1]),
         lq: frame.payload[2],
         snr: view.getInt8(3),          // Already signed
         activeAntenna: frame.payload[4],
@@ -122,7 +129,7 @@ const handleLinkStats = (frame) => {
         rfPower: frame.payload[6]
       },
       downlink: {
-        rssi: frame.payload[7],
+        rssi: convertRSSI(frame.payload[7]),
         lq: frame.payload[8],
         snr: view.getInt8(9)           // Already signed
       }
