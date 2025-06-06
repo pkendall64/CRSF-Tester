@@ -40,11 +40,14 @@ const formatAltitude = (altitude) => {
 
 const handleGpsFrame = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_GPS) {
+    // Create a DataView from the payload
+    const view = new DataView(frame.payload.buffer)
+    
     // Parse GPS data according to CRSF spec
-    const latitude = convertCoordinate(frame.payload.readInt32BE(0))
-    const longitude = convertCoordinate(frame.payload.readInt32BE(4))
-    const speed = frame.payload.readUInt16BE(8)
-    const altitude = frame.payload.readInt16BE(10) - 1000
+    const latitude = convertCoordinate(view.getInt32(0, false))  // false for big-endian
+    const longitude = convertCoordinate(view.getInt32(4, false))
+    const speed = view.getUint16(8, false)
+    const altitude = view.getInt16(10, false) - 1000
     const satellites = frame.payload[12]
 
     gpsData.value = {

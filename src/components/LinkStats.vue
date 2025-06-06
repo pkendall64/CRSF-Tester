@@ -108,23 +108,23 @@ const resetFailsafeTimer = () => {
 // Handle incoming link statistics frames
 const handleLinkStats = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_LINK_STATISTICS) {
-    const data = frame.payload
+    const view = new DataView(frame.payload.buffer)
 
     // Update link statistics
     linkStats.value = {
       uplink: {
-        rssiAnt1: data[0],
-        rssiAnt2: data[1],
-        lq: data[2],
-        snr: data[3],          // Already signed
-        activeAntenna: data[4],
-        rfProfile: data[5],
-        rfPower: data[6]
+        rssiAnt1: frame.payload[0],
+        rssiAnt2: frame.payload[1],
+        lq: frame.payload[2],
+        snr: view.getInt8(3),          // Already signed
+        activeAntenna: frame.payload[4],
+        rfProfile: frame.payload[5],
+        rfPower: frame.payload[6]
       },
       downlink: {
-        rssi: data[7],
-        lq: data[8],
-        snr: data[9]           // Already signed
+        rssi: frame.payload[7],
+        lq: frame.payload[8],
+        snr: view.getInt8(9)           // Already signed
       }
     }
 

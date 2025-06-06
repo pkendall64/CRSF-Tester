@@ -52,6 +52,7 @@ const handleRCFrame = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_RC_CHANNELS_PACKED) {
     // CRSF RC channels are 11 bits each, packed
     const channels = new Array(16).fill(0)
+    const view = new DataView(frame.payload.buffer)
     let byteIndex = 0
     let bitIndex = 0
 
@@ -59,9 +60,9 @@ const handleRCFrame = (frame) => {
       let value = 0
 
       // Read up to 3 bytes to get our 11 bits
-      value = frame.payload[byteIndex] // First byte
-      value |= (frame.payload[byteIndex + 1] << 8) // Second byte
-      value |= (frame.payload[byteIndex + 2] << 16) // Third byte if needed
+      value = view.getUint8(byteIndex) // First byte
+      value |= (view.getUint8(byteIndex + 1) << 8) // Second byte
+      value |= (view.getUint8(byteIndex + 2) << 16) // Third byte if needed
 
       // Extract 11 bits starting from current bit position
       value = (value >> bitIndex) & 0x07FF

@@ -30,9 +30,10 @@ const convertAttitude = (value) => {
 
 const handleAttitudeFrame = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_ATTITUDE) {
-    const pitch = convertAttitude(frame.payload.readInt16BE(0))
-    const roll = convertAttitude(frame.payload.readInt16BE(2))
-    const yaw = convertAttitude(frame.payload.readInt16BE(4))
+    const view = new DataView(frame.payload.buffer)
+    const pitch = convertAttitude(view.getInt16(0, false))
+    const roll = convertAttitude(view.getInt16(2, false))
+    const yaw = convertAttitude(view.getInt16(4, false))
 
     attitudeData.value = {
       pitch,
@@ -84,10 +85,10 @@ onUnmounted(() => {
           transform: `rotate(${attitudeData.roll}deg)`
         }">
           <div class="sky" :style="{
-            transform: `translateY(${attitudeData.pitch * 2}px)`
+            transform: `translateY(${-attitudeData.pitch * 2}px)`
           }" />
           <div class="ground" :style="{
-            transform: `translateY(${attitudeData.pitch * 2}px)`
+            transform: `translateY(${-attitudeData.pitch * 2}px)`
           }" />
           <div class="pitch-lines">
             <div v-for="i in 9" :key="i" class="pitch-line" :style="{
@@ -169,17 +170,20 @@ onUnmounted(() => {
 
 .sky {
   position: absolute;
-  width: 100%;
-  height: 50%;
+  width: 200%;  /* Make wider than container */
+  height: 200%; /* Make taller than container */
+  left: -50%;   /* Center the wider element */
+  top: -50%;    /* Center the taller element */
   background: linear-gradient(to bottom, #1e90ff, #87ceeb);
   transition: transform 0.1s ease-out;
 }
 
 .ground {
   position: absolute;
-  width: 100%;
-  height: 50%;
-  top: 50%;
+  width: 200%;  /* Make wider than container */
+  height: 200%; /* Make taller than container */
+  left: -50%;   /* Center the wider element */
+  top: 50%;     /* Position below the sky */
   background: linear-gradient(to bottom, #8b4513, #654321);
   transition: transform 0.1s ease-out;
 }
