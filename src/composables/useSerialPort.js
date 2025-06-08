@@ -155,8 +155,6 @@ export function useSerialPort() {
 
         // Log received frame
         const hexLog = frameToHexString(frame)
-        // console.log('Received frame:', hexLog.formatted)
-        // console.log('Frame parts:', hexLog.parts)
 
         // Notify all registered handlers
         frameHandlers.value.forEach(handler => {

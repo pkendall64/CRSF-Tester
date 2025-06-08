@@ -8,7 +8,6 @@ import DeviceDiscovery from "@/components/DeviceDiscovery.vue"
 import LinkStats from "@/components/LinkStats.vue";
 import DeviceParameters from "@/components/DeviceParameters.vue";
 import GpsMonitor from './components/GPS.vue'
-import AttitudeMonitor from './components/Attitude.vue'
 import BatterySensor from './components/BatterySensor.vue'
 import Attitude3D from './components/Attitude3D.vue'
 
@@ -120,9 +119,6 @@ const getStatusColor = computed(() => {
           </v-col>
           <v-col v-show="showAttitude3D" cols="12" md="6">
             <Attitude3D v-model:show="showAttitude3D" />
-          </v-col>
-          <v-col v-show="showAttitude" cols="12" md="4" lg="3" class="left-column">
-            <AttitudeMonitor v-model:show="showAttitude" />
           </v-col>
           <v-col v-show="showGps" cols="12" md="4" lg="3" class="left-column">
             <GpsMonitor v-model:show="showGps" />

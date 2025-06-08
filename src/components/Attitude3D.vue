@@ -5,6 +5,8 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader'
 import { TextureLoader } from 'three'
+import compassRose from '../assets/compass-rose.png'
+import artificialHorizon from '../assets/artificial-horizon.svg'
 
 // Import assets
 import airplaneObj from '../assets/models/airplane.obj'
@@ -28,7 +30,8 @@ const scene = shallowRef(null)
 const camera = shallowRef(null)
 const renderer = shallowRef(null)
 const controls = shallowRef(null)
-const plane = shallowRef(null)
+const aircraft = shallowRef(null)
+const gridHelper = shallowRef(null)
 const container = ref(null)
 const isLoading = ref(true)
 const hasError = ref(false)
@@ -68,7 +71,7 @@ const handleAttitudeFrame = (frame) => {
     emit('update:show', true)
     
     // Only try to reset if the model is loaded
-    if (!hasInitialOffset.value && !isLoading.value && plane.value) {
+    if (!hasInitialOffset.value && !isLoading.value && aircraft.value) {
       resetView()
       hasInitialOffset.value = true
     }
@@ -80,8 +83,13 @@ const getAdjustedAttitude = () => {
   return {
     roll: attitudeData.value.roll - attitudeOffsets.value.roll,
     pitch: attitudeData.value.pitch - attitudeOffsets.value.pitch,
-    yaw: (attitudeData.value.yaw - attitudeOffsets.value.yaw + 180) % 360 // Add 180 degrees to yaw
+    yaw: (attitudeData.value.yaw - attitudeOffsets.value.yaw + 180) % 360 // Keep 180 for plane orientation
   }
+}
+
+// Get compass yaw (without the 180 offset)
+const getCompassYaw = () => {
+  return (attitudeData.value.yaw - attitudeOffsets.value.yaw) % 360
 }
 
 // Load the 3D model
@@ -113,13 +121,13 @@ const loadModel = async () => {
     // Scale and position the model
     model.scale.set(0.1, 0.1, 0.1)
     
-    // Remove old plane if it exists
-    if (plane.value) {
-      scene.value.remove(plane.value)
+    // Remove old aircraft if it exists
+    if (aircraft.value) {
+      scene.value.remove(aircraft.value)
     }
     
-    plane.value = model
-    scene.value.add(plane.value)
+    aircraft.value = model
+    scene.value.add(aircraft.value)
 
     // Force a render
     if (renderer.value && scene.value && camera.value) {
@@ -167,8 +175,8 @@ const initThree = async () => {
     container.value.appendChild(renderer.value.domElement)
 
     // Add a grid helper
-    const gridHelper = new THREE.GridHelper(20, 20)
-    scene.value.add(gridHelper)
+    gridHelper.value = new THREE.GridHelper(20, 20)
+    scene.value.add(gridHelper.value)
 
     // Add orbit controls
     controls.value = new OrbitControls(camera.value, renderer.value.domElement)
@@ -213,7 +221,7 @@ const animate = () => {
   
   requestAnimationFrame(animate)
   
-  if (plane.value) {
+  if (aircraft.value) {
     const adjusted = getAdjustedAttitude()
     
     // Create quaternions for each rotation
@@ -222,10 +230,15 @@ const animate = () => {
     const rollQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(adjusted.roll))
     
     // Apply rotations in order: yaw, pitch, roll
-    plane.value.quaternion.identity()
-    plane.value.quaternion.multiply(yawQuat)
-    plane.value.quaternion.multiply(pitchQuat)
-    plane.value.quaternion.multiply(rollQuat)
+    aircraft.value.quaternion.identity()
+    aircraft.value.quaternion.multiply(yawQuat)
+    aircraft.value.quaternion.multiply(pitchQuat)
+    aircraft.value.quaternion.multiply(rollQuat)
+
+    // Update grid helper rotation to match aircraft
+    if (gridHelper.value) {
+      gridHelper.value.quaternion.copy(aircraft.value.quaternion)
+    }
   }
 
   controls.value.update()
@@ -257,8 +270,8 @@ const cleanup = () => {
     scene.value.clear()
     scene.value = null
   }
-  if (plane.value) {
-    plane.value = null
+  if (aircraft.value) {
+    aircraft.value = null
   }
   if (controls.value) {
     controls.value.dispose()
@@ -284,7 +297,7 @@ watch(() => props.show, (newValue) => {
 
 // Watch for attitude changes
 watch(attitudeData, () => {
-  if (plane.value) {
+  if (aircraft.value) {
     const adjusted = getAdjustedAttitude()
     
     // Create quaternions for each rotation
@@ -293,16 +306,16 @@ watch(attitudeData, () => {
     const rollQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(adjusted.roll))
     
     // Apply rotations in order: yaw, pitch, roll
-    plane.value.quaternion.identity()
-    plane.value.quaternion.multiply(yawQuat)
-    plane.value.quaternion.multiply(pitchQuat)
-    plane.value.quaternion.multiply(rollQuat)
+    aircraft.value.quaternion.identity()
+    aircraft.value.quaternion.multiply(yawQuat)
+    aircraft.value.quaternion.multiply(pitchQuat)
+    aircraft.value.quaternion.multiply(rollQuat)
   }
 }, { deep: true })
 
 // Reset view function
 const resetView = () => {
-  if (!camera.value || !controls.value || !plane.value) {
+  if (!camera.value || !controls.value || !aircraft.value) {
     return
   }
   
@@ -342,13 +355,37 @@ onUnmounted(() => {
     </v-card-title>
     <v-card-text>
       <div class="attitude-3d">
+        <!-- Artificial Horizon -->
+        <div class="artificial-horizon">
+          <div class="horizon-background" :style="{ transform: `rotate(${-attitudeData.roll}deg) translateY(${-attitudeData.pitch * 1.125}px)` }">
+            <div class="sky"></div>
+            <div class="ground"></div>
+          </div>
+          <div class="horizon-overlay">
+            <img :src="artificialHorizon" alt="Artificial Horizon Overlay" class="horizon-image" />
+          </div>
+        </div>
+
+        <!-- Compass Rose -->
+        <div class="compass-rose">
+          <img :src="compassRose" alt="Compass Rose Outer" class="compass-image outer" />
+          <div class="compass-inner" :style="{ transform: `rotate(${getCompassYaw()}deg)` }">
+            <img :src="compassRose" alt="Compass Rose Inner" class="compass-image inner" />
+          </div>
+        </div>
+
+        <!-- 3D View -->
         <div ref="container" class="container"></div>
+        
+        <!-- Loading and Error States -->
         <div v-if="isLoading" class="loading">
           <v-progress-circular indeterminate></v-progress-circular>
         </div>
         <div v-if="hasError" class="error">
           Failed to load 3D model
         </div>
+
+        <!-- Reset Button -->
         <v-btn
           v-if="!isLoading && !hasError"
           class="reset-button"
@@ -388,8 +425,98 @@ onUnmounted(() => {
 
 .reset-button {
   position: absolute;
-  top: 16px;
+  bottom: 16px;
   right: 16px;
   z-index: 1000;
+}
+
+/* Artificial Horizon Styles */
+.artificial-horizon {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.horizon-background {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.sky {
+  position: absolute;
+  width: 100%;
+  height: 450%;
+  left: 0%;
+  top: -350%;
+  background: linear-gradient(to bottom, #00264b, #a9d4ff);
+}
+
+.ground {
+  position: absolute;
+  width: 100%;
+  height: 400%;
+  left: 0%;
+  top: 50%;
+  background: linear-gradient(to bottom, #8b4513, #654321);
+}
+
+.horizon-overlay {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.horizon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Compass Rose Styles */
+.compass-rose {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  overflow: visible;
+  z-index: 1000;
+}
+
+.compass-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.compass-image.outer {
+  z-index: 1;
+}
+
+.compass-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  clip-path: circle(41.5% at 50% 50%);
+}
+
+.compass-image.inner {
+  z-index: 2;
 }
 </style> 
