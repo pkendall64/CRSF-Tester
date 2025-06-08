@@ -362,7 +362,10 @@ const updateParameter = (index) => {
     sendFrame(frame)
   }
 
-  loadParameters(false)
+  // Add a delay before reloading parameters
+  setTimeout(() => {
+    loadParameters(false)
+  }, 100)
 }
 
 // Watch for device ID changes
@@ -402,9 +405,9 @@ onUnmounted(() => {
     <v-card-text>
       <template v-if="parameters.length > 0">
         <template v-for="(param, index) in parameters" :key="param.name">
-          <v-row no-gutters v-if="param.parentFolder === folder && index !== 0">
-            <v-col class="text-subtitle-1">{{ param.name }}</v-col>
-            <v-col class="flex">
+          <v-row no-gutters v-if="param.parentFolder === folder && index !== 0" class="mb-2">
+            <v-col cols="5" class="text-subtitle-1 d-flex align-center">{{ param.name }}</v-col>
+            <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 4 : 5" class="d-flex align-center">
               <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
                 <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"
                   @update:model-value="updateParameter(index)"></VNumberInput>
@@ -418,7 +421,7 @@ onUnmounted(() => {
                   @update:model-value="updateParameter(index)"></VNumberInput>
               </template>
               <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                <TextSelectionWidget v-model="parameters[index]" @update:model-value="updateParameter(index)" />
+                <TextSelectionWidget v-model="parameters[index]" @update:model-value="updateParameter(index)" class="text-selection-widget" />
               </template>
               <template v-else-if="param.type === PARAM_TYPE.FOLDER">
                 <v-btn color="primary" size="small" @click="folder = index">
@@ -441,10 +444,10 @@ onUnmounted(() => {
                 {{ param.value }}
               </template>
             </v-col>
-            <v-col class="align-content-center">{{ param.unit || '' }}</v-col>
+            <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 3 : 2" class="d-flex align-center">{{ param.unit || '' }}</v-col>
           </v-row>
         </template>
-        <v-row v-if="folder !== 0">
+        <v-row v-if="folder !== 0" class="mt-4">
           <v-btn color="primary" size="small" @click="folder = parameters[folder].parentFolder">
             <v-icon start>mdi-folder</v-icon>
             Back
@@ -456,3 +459,10 @@ onUnmounted(() => {
     </v-card-text>
   </v-card>
 </template>
+
+<style scoped>
+.text-selection-widget {
+  width: 100%;
+  max-width: 200px;
+}
+</style>
