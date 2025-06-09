@@ -34,6 +34,10 @@ const currentChunk = ref({
   chunkNumber: 0
 })
 let parameterQueue = []
+const transitionName = ref('slide')
+const isTransitioning = ref(false)
+const currentFolderContent = ref([])
+const pendingFolderChange = ref(null)
 
 // Helper function to parse null-terminated string from Uint8Array
 const parseNullTerminatedString = (array) => {
@@ -345,6 +349,12 @@ const loadParameters = (all) => {
   requestNextChunk()
 }
 
+const updateCurrentFolderContent = () => {
+  currentFolderContent.value = parameters.value.filter((param, index) => 
+    param.parentFolder === folder.value && index !== 0
+  )
+}
+
 const executeCommand = (index) => {
   console.log('execute:', index)
 }
@@ -368,12 +378,59 @@ const updateParameter = (index) => {
   }, 100)
 }
 
+const handleTransitionEnd = () => {
+  if (pendingFolderChange.value !== null) {
+    const { index, isBack } = pendingFolderChange.value
+    pendingFolderChange.value = null
+    
+    // Clear current content
+    currentFolderContent.value = []
+    
+    if (isBack) {
+      updateCurrentFolderContent()
+    } else {
+      // Check if we need to load this folder's parameters
+      if (!parameters.value[index]?.children?.length) {
+        loadParameters(false)
+      } else {
+        updateCurrentFolderContent()
+      }
+    }
+    
+    isTransitioning.value = false
+  }
+}
+
+const enterFolder = async (index) => {
+  if (isTransitioning.value) return
+  
+  isTransitioning.value = true
+  transitionName.value = 'slide'
+  pendingFolderChange.value = { index, isBack: false }
+  folder.value = index
+}
+
+const goBack = async () => {
+  if (isTransitioning.value) return
+  
+  isTransitioning.value = true
+  transitionName.value = 'slide-back'
+  const parentFolder = parameters.value[folder.value].parentFolder
+  pendingFolderChange.value = { index: parentFolder, isBack: true }
+  folder.value = parentFolder
+}
+
 // Watch for device ID changes
 watch(() => props.deviceId, (newId) => {
   if (newId) {
     loadParameters(true)
   }
 })
+
+// Watch for parameter updates
+watch(parameters, () => {
+  updateCurrentFolderContent()
+}, { deep: true })
 
 // Setup and cleanup
 onMounted(() => {
@@ -396,7 +453,7 @@ onUnmounted(() => {
         {{ parameters.length > 0 ? parameters.length - 1 : 0 }} / {{ parameterCount }} parameters
       </v-chip>
       <v-spacer></v-spacer>
-      <v-btn :loading="loading" :disabled="loading" color="primary" size="small" @click="loadParameters(false)">
+      <v-btn :loading="loading" :disabled="loading || isTransitioning" color="primary" size="small" @click="loadParameters(false)">
         <v-icon start>mdi-refresh</v-icon>
         Reload
       </v-btn>
@@ -404,55 +461,61 @@ onUnmounted(() => {
 
     <v-card-text>
       <template v-if="parameters.length > 0">
-        <template v-for="(param, index) in parameters" :key="param.name">
-          <v-row no-gutters v-if="param.parentFolder === folder && index !== 0" class="mb-2">
-            <v-col cols="5" class="text-subtitle-1 d-flex align-center">{{ param.name }}</v-col>
-            <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 4 : 5" class="d-flex align-center">
-              <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
-                <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"
-                  @update:model-value="updateParameter(index)"></VNumberInput>
+        <div class="parameters-container">
+          <transition :name="transitionName" @after-leave="handleTransitionEnd">
+            <div :key="folder" class="parameters-content">
+              <template v-for="param in currentFolderContent" :key="param.name">
+                <v-row no-gutters class="mb-2">
+                  <v-col cols="5" class="text-subtitle-1 d-flex align-center">{{ param.name }}</v-col>
+                  <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 4 : 5" class="d-flex align-center">
+                    <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
+                      <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
+                        @update:model-value="updateParameter(param.paramNumber)"></VNumberInput>
+                    </template>
+                    <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
+                      <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
+                        @update:model-value="updateParameter(param.paramNumber)"></VNumberInput>
+                    </template>
+                    <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
+                      <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
+                        @update:model-value="updateParameter(param.paramNumber)"></VNumberInput>
+                    </template>
+                    <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
+                      <TextSelectionWidget v-model="parameters[param.paramNumber]" @update:model-value="updateParameter(param.paramNumber)" class="text-selection-widget" />
+                    </template>
+                    <template v-else-if="param.type === PARAM_TYPE.FOLDER">
+                      <v-btn color="primary" size="small" @click="enterFolder(param.paramNumber)" :disabled="isTransitioning">
+                        <v-icon start>mdi-folder</v-icon>
+                        Enter
+                      </v-btn>
+                    </template>
+                    <template v-else-if="param.type === PARAM_TYPE.COMMAND">
+                      <v-btn color="secondary" size="small" @click="executeCommand(param.paramNumber)" :disabled="isTransitioning">
+                        <v-icon start>mdi-folder</v-icon>
+                        Execute
+                      </v-btn>
+                    </template>
+                    <template v-else-if="param.type === PARAM_TYPE.FLOAT">
+                      {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
+                    </template>
+                    <template v-else-if="param.type === PARAM_TYPE.INFO || param.type === PARAM_TYPE.STRING">
+                      {{ param.value }}
+                    </template>
+                  </v-col>
+                  <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 3 : 2" class="d-flex align-center">{{ param.unit || '' }}</v-col>
+                </v-row>
               </template>
-              <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
-                <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"
-                  @update:model-value="updateParameter(index)"></VNumberInput>
-              </template>
-              <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
-                <VNumberInput :min="param.min" :max="param.max" v-model="parameters[index].value"
-                  @update:model-value="updateParameter(index)"></VNumberInput>
-              </template>
-              <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
-                <TextSelectionWidget v-model="parameters[index]" @update:model-value="updateParameter(index)" class="text-selection-widget" />
-              </template>
-              <template v-else-if="param.type === PARAM_TYPE.FOLDER">
-                <v-btn color="primary" size="small" @click="folder = index">
-                  <v-icon start>mdi-folder</v-icon>
-                  Enter
-                </v-btn>
-              </template>
-              <template v-else-if="param.type === PARAM_TYPE.COMMAND">
-                <v-btn color="secondary" size="small" @click="executeCommand(index)">
-                  <v-icon start>mdi-folder</v-icon>
-                  Execute
-                </v-btn>
-              </template>
-              <template v-else-if="param.type === PARAM_TYPE.FLOAT">
-                {{ (param.value / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}
-                <!--                  {{ (param.default / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
-                <!--                  {{ (param.stepSize / Math.pow(10, param.decimalPoint)).toFixed(param.decimalPoint) }}-->
-              </template>
-              <template v-else-if="param.type === PARAM_TYPE.INFO || param.type === PARAM_TYPE.STRING">
-                {{ param.value }}
-              </template>
-            </v-col>
-            <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 3 : 2" class="d-flex align-center">{{ param.unit || '' }}</v-col>
-          </v-row>
-        </template>
-        <v-row v-if="folder !== 0" class="mt-4">
-          <v-btn color="primary" size="small" @click="folder = parameters[folder].parentFolder">
-            <v-icon start>mdi-folder</v-icon>
-            Back
-          </v-btn>
-        </v-row>
+              <v-row v-if="folder !== 0" class="mt-4 mb-2">
+                <v-col>
+                  <v-btn color="primary" size="small" @click="goBack" :disabled="isTransitioning">
+                    <v-icon start>mdi-folder</v-icon>
+                    Back
+                  </v-btn>
+                </v-col>
+              </v-row>
+            </div>
+          </transition>
+        </div>
       </template>
       <v-progress-linear v-else-if="loading" indeterminate color="primary"></v-progress-linear>
       <v-alert v-else type="info" text="No parameters loaded"></v-alert>
@@ -464,5 +527,50 @@ onUnmounted(() => {
 .text-selection-widget {
   width: 100%;
   max-width: 200px;
+}
+
+.parameters-container {
+  position: relative;
+  overflow: hidden;
+  min-height: 100px;
+}
+
+.parameters-content {
+  position: relative;
+  width: 100%;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.5s ease;
+  position: absolute;
+  width: 100%;
+}
+
+.slide-enter-from {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.slide-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.slide-back-enter-active,
+.slide-back-leave-active {
+  transition: all 0.5s ease;
+  position: absolute;
+  width: 100%;
+}
+
+.slide-back-enter-from {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.slide-back-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
 }
 </style>
