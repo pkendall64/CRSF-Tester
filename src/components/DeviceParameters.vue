@@ -38,6 +38,7 @@ const transitionName = ref('slide')
 const isTransitioning = ref(false)
 const currentFolderContent = ref([])
 const pendingFolderChange = ref(null)
+const loadedParameterCount = ref(0)
 
 // Helper function to parse null-terminated string from Uint8Array
 const parseNullTerminatedString = (array) => {
@@ -69,18 +70,23 @@ const PARAM_TYPE = {
   COMMAND: 0x0D,
 }
 
+const PARAM_HIDDEN = 0x80
+
 // Parameter parsing functions for different types
 const parameterParsers = {
   // Common parser for the header part of all parameters
   parseCommonFields(payload) {
     let offset = 0
     const parentFolder = payload[offset++]
-    const dataType = payload[offset++] & 0x3F
+    const typeByte = payload[offset++]
+    const dataType = typeByte & 0x3F
+    const isHidden = (typeByte & PARAM_HIDDEN) !== 0
 
     const { strValue, newOffset } = parseNullTerminatedString2(payload, 2)
     return {
       parentFolder,
       dataType,
+      isHidden,
       name: strValue,
       offset: newOffset
     }
@@ -249,15 +255,12 @@ const handleParameterEntry = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_PARAM_ENTRY && frame.origin === props.deviceId) {
     const paramNumber = frame.payload[0]
     const chunksRemaining = frame.payload[1]
-    const paramData = frame.payload.slice(2) // Parameter data starts after param_number and chunks_remaining
+    const paramData = frame.payload.slice(2)
 
-    // Add chunk to current parameter data
     currentParameterChunks.value.push(paramData)
     currentChunk.value.chunkNumber++
 
-    // If this is the last chunk (chunks_remaining = 0), parse the complete parameter
     if (chunksRemaining === 0) {
-      // Combine all chunks into one buffer
       const totalLength = currentParameterChunks.value.reduce((sum, chunk) => sum + chunk.length, 0)
       const completeParameter = new Uint8Array(totalLength)
       let offset = 0
@@ -267,48 +270,37 @@ const handleParameterEntry = (frame) => {
         offset += chunk.length
       })
 
-      // Print hexdump of parameter data
-      console.log('Parameter data hexdump:', Array.from(completeParameter).map(b => b.toString(16).padStart(2, '0')).join(' '))
+      const { parentFolder, dataType, isHidden, name, offset: parseOffset } = parameterParsers.parseCommonFields(completeParameter)
 
-      // Parse the complete parameter
-      const { parentFolder, dataType, name, offset: parseOffset } = parameterParsers.parseCommonFields(completeParameter)
-
-      // Get the appropriate parser for this data type
       const parser = parameterParsers[dataType]
       if (!parser) {
         console.warn(`Unknown parameter type: 0x${dataType.toString(16)}`)
         return
       }
 
-      // Parse the type-specific fields
       const typeFields = parser(completeParameter, parseOffset)
 
-      // Combine all fields
       const parameter = {
         paramNumber,
         parentFolder,
         type: dataType,
+        isHidden,
         name,
         ...typeFields
       }
 
-      // Add or update parameter
       parameters.value[currentChunk.value.paramNumber] = parameter
+      loadedParameterCount.value = parameters.value.length - 1
 
-      // Clear chunks buffer for next parameter
       currentParameterChunks.value = []
-
-      // Move to next parameter of finish if none in the queue
       currentChunk.value.chunkNumber = 0
       if (parameterQueue.length > 0) {
         currentChunk.value.paramNumber = parameterQueue.pop()
       } else {
-        console.log('Finished loading parameters')
         loading.value = false
       }
     }
 
-    // Request next chunk or finish
     if (loading.value) {
       requestNextChunk()
     }
@@ -450,7 +442,7 @@ onUnmounted(() => {
     <v-card-title class="d-flex align-center">
       {{ deviceName }} Parameters
       <v-chip class="ml-2" size="small">
-        {{ parameters.length > 0 ? parameters.length - 1 : 0 }} / {{ parameterCount }} parameters
+        {{ loadedParameterCount }} / {{ parameterCount }} parameters
       </v-chip>
       <v-spacer></v-spacer>
       <v-btn :loading="loading" :disabled="loading || isTransitioning" color="primary" size="small" @click="loadParameters(false)">
@@ -465,20 +457,20 @@ onUnmounted(() => {
           <transition :name="transitionName" @after-leave="handleTransitionEnd">
             <div :key="folder" class="parameters-content">
               <template v-for="param in currentFolderContent" :key="param.name">
-                <v-row no-gutters class="mb-2">
+                <v-row no-gutters class="mb-2" v-if="!param.isHidden">
                   <v-col cols="5" class="text-subtitle-1 d-flex align-center">{{ param.name }}</v-col>
                   <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 4 : 5" class="d-flex align-center">
                     <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
                       <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
-                        @update:model-value="updateParameter(param.paramNumber)"></VNumberInput>
+                        @update:model-value="updateParameter(param.paramNumber)" density="compact" hide-details></VNumberInput>
                     </template>
                     <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
                       <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
-                        @update:model-value="updateParameter(param.paramNumber)"></VNumberInput>
+                        @update:model-value="updateParameter(param.paramNumber)" density="compact" hide-details></VNumberInput>
                     </template>
                     <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
                       <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
-                        @update:model-value="updateParameter(param.paramNumber)"></VNumberInput>
+                        @update:model-value="updateParameter(param.paramNumber)" density="compact" hide-details></VNumberInput>
                     </template>
                     <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
                       <TextSelectionWidget v-model="parameters[param.paramNumber]" @update:model-value="updateParameter(param.paramNumber)" class="text-selection-widget" />
