@@ -46,13 +46,14 @@ const parseNullTerminatedString = (array) => {
   return new TextDecoder().decode(array.slice(0, nullIndex >= 0 ? nullIndex : undefined))
 }
 
+// Helper function to parse null-terminated string from a specific offset in Uint8Array
+// Returns both the string value and the new offset after the string
 const parseNullTerminatedString2 = (array, offset) => {
   const nullIndex = offset + array.slice(offset).findIndex(byte => byte === 0)
   const strValue = new TextDecoder().decode(array.slice(offset, nullIndex >= 0 ? nullIndex : undefined))
   const newOffset = nullIndex >= 0 ? nullIndex + 1 : undefined
   return { strValue, newOffset }
 }
-
 
 // Parameter data types
 const PARAM_TYPE = {
@@ -70,17 +71,19 @@ const PARAM_TYPE = {
   COMMAND: 0x0D,
 }
 
+// Top bit in type byte indicates parameter should be hidden from UI
 const PARAM_HIDDEN = 0x80
 
 // Parameter parsing functions for different types
 const parameterParsers = {
   // Common parser for the header part of all parameters
+  // Extracts parent folder, type, hidden status, and name
   parseCommonFields(payload) {
     let offset = 0
-    const parentFolder = payload[offset++]
-    const typeByte = payload[offset++]
-    const dataType = typeByte & 0x3F
-    const isHidden = (typeByte & PARAM_HIDDEN) !== 0
+    const parentFolder = payload[offset++]  // First byte is parent folder ID
+    const typeByte = payload[offset++]      // Second byte contains type and hidden flag
+    const dataType = typeByte & 0x3F        // Extract type from bottom 6 bits
+    const isHidden = (typeByte & PARAM_HIDDEN) !== 0  // Check if top bit is set
 
     const { strValue, newOffset } = parseNullTerminatedString2(payload, 2)
     return {
@@ -250,17 +253,21 @@ const parameterSerializers = {
 // Store parameter chunks until complete
 const currentParameterChunks = ref([])
 
-// Modified handleParameterEntry to use chunks_remaining
+// Handle incoming parameter entry frames
+// Processes chunks of parameter data and assembles complete parameters
 const handleParameterEntry = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_PARAM_ENTRY && frame.origin === props.deviceId) {
     const paramNumber = frame.payload[0]
     const chunksRemaining = frame.payload[1]
     const paramData = frame.payload.slice(2)
 
+    // Add chunk to current parameter data
     currentParameterChunks.value.push(paramData)
     currentChunk.value.chunkNumber++
 
+    // If this is the last chunk, parse the complete parameter
     if (chunksRemaining === 0) {
+      // Combine all chunks into one buffer
       const totalLength = currentParameterChunks.value.reduce((sum, chunk) => sum + chunk.length, 0)
       const completeParameter = new Uint8Array(totalLength)
       let offset = 0
@@ -270,16 +277,20 @@ const handleParameterEntry = (frame) => {
         offset += chunk.length
       })
 
+      // Parse the complete parameter
       const { parentFolder, dataType, isHidden, name, offset: parseOffset } = parameterParsers.parseCommonFields(completeParameter)
 
+      // Get the appropriate parser for this data type
       const parser = parameterParsers[dataType]
       if (!parser) {
         console.warn(`Unknown parameter type: 0x${dataType.toString(16)}`)
         return
       }
 
+      // Parse the type-specific fields
       const typeFields = parser(completeParameter, parseOffset)
 
+      // Combine all fields into the final parameter object
       const parameter = {
         paramNumber,
         parentFolder,
@@ -289,11 +300,15 @@ const handleParameterEntry = (frame) => {
         ...typeFields
       }
 
+      // Add or update parameter
       parameters.value[currentChunk.value.paramNumber] = parameter
       loadedParameterCount.value = parameters.value.length - 1
 
+      // Clear chunks buffer for next parameter
       currentParameterChunks.value = []
       currentChunk.value.chunkNumber = 0
+
+      // Move to next parameter or finish if none in the queue
       if (parameterQueue.length > 0) {
         currentChunk.value.paramNumber = parameterQueue.pop()
       } else {
@@ -301,6 +316,7 @@ const handleParameterEntry = (frame) => {
       }
     }
 
+    // Request next chunk if still loading
     if (loading.value) {
       requestNextChunk()
     }
