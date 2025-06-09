@@ -3,6 +3,8 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
 import { useDeviceId } from '../composables/useDeviceId'
 import TextSelectionWidget from "@/components/TextSelectionWidget.vue";
+import { PARAM_TYPE, parseCommonFields } from '../constants/parameterTypes'
+import { parameterParsers, parameterSerializers } from '../utils/parameterParsers'
 
 const props = defineProps({
   deviceId: {
@@ -40,216 +42,6 @@ const currentFolderContent = ref([])
 const pendingFolderChange = ref(null)
 const loadedParameterCount = ref(0)
 
-// Helper function to parse null-terminated string from Uint8Array
-const parseNullTerminatedString = (array) => {
-  const nullIndex = array.findIndex(byte => byte === 0)
-  return new TextDecoder().decode(array.slice(0, nullIndex >= 0 ? nullIndex : undefined))
-}
-
-// Helper function to parse null-terminated string from a specific offset in Uint8Array
-// Returns both the string value and the new offset after the string
-const parseNullTerminatedString2 = (array, offset) => {
-  const nullIndex = offset + array.slice(offset).findIndex(byte => byte === 0)
-  const strValue = new TextDecoder().decode(array.slice(offset, nullIndex >= 0 ? nullIndex : undefined))
-  const newOffset = nullIndex >= 0 ? nullIndex + 1 : undefined
-  return { strValue, newOffset }
-}
-
-// Parameter data types
-const PARAM_TYPE = {
-  UINT8: 0x00,
-  INT8: 0x01,
-  UINT16: 0x02,
-  INT16: 0x03,
-  UINT32: 0x04,
-  INT32: 0x05,
-  FLOAT: 0x08,
-  TEXT_SELECTION: 0x09,
-  STRING: 0x0A,
-  FOLDER: 0x0B,
-  INFO: 0x0C,
-  COMMAND: 0x0D,
-}
-
-// Top bit in type byte indicates parameter should be hidden from UI
-const PARAM_HIDDEN = 0x80
-
-// Parameter parsing functions for different types
-const parameterParsers = {
-  // Common parser for the header part of all parameters
-  // Extracts parent folder, type, hidden status, and name
-  parseCommonFields(payload) {
-    let offset = 0
-    const parentFolder = payload[offset++]  // First byte is parent folder ID
-    const typeByte = payload[offset++]      // Second byte contains type and hidden flag
-    const dataType = typeByte & 0x3F        // Extract type from bottom 6 bits
-    const isHidden = (typeByte & PARAM_HIDDEN) !== 0  // Check if top bit is set
-
-    const { strValue, newOffset } = parseNullTerminatedString2(payload, 2)
-    return {
-      parentFolder,
-      dataType,
-      isHidden,
-      name: strValue,
-      offset: newOffset
-    }
-  },
-
-  [PARAM_TYPE.UINT8](payload, offset) {
-    return {
-      value: payload[offset],
-      min: payload[offset + 1],
-      max: payload[offset + 2],
-      default: payload[offset + 3],
-      unit: parseNullTerminatedString(payload.slice(offset + 4))
-    }
-  },
-
-  [PARAM_TYPE.INT8](payload, offset) {
-    return {
-      value: new Int8Array([payload[offset]])[0],
-      min: new Int8Array([payload[offset + 1]])[0],
-      max: new Int8Array([payload[offset + 2]])[0],
-      default: new Int8Array([payload[offset + 3]])[0],
-      unit: parseNullTerminatedString(payload.slice(offset + 4))
-    }
-  },
-
-  [PARAM_TYPE.UINT16](payload, offset) {
-    const view = new DataView(payload.buffer)
-    return {
-      value: view.getUint16(offset),
-      min: view.getUint16(offset + 2),
-      max: view.getUint16(offset + 4),
-      default: view.getUint16(offset + 6),
-      unit: parseNullTerminatedString(payload.slice(offset + 8))
-    }
-  },
-
-  [PARAM_TYPE.INT16](payload, offset) {
-    const view = new DataView(payload.buffer)
-    return {
-      value: view.getInt16(offset),
-      min: view.getInt16(offset + 2),
-      max: view.getInt16(offset + 4),
-      default: view.getInt16(offset + 6),
-      unit: parseNullTerminatedString(payload.slice(offset + 8))
-    }
-  },
-
-  [PARAM_TYPE.UINT32](payload, offset) {
-    const view = new DataView(payload.buffer)
-    return {
-      value: view.getUint32(offset),
-      min: view.getUint32(offset + 4),
-      max: view.getUint32(offset + 8),
-      default: view.getUint32(offset + 12),
-      unit: parseNullTerminatedString(payload.slice(offset + 16))
-    }
-  },
-
-  [PARAM_TYPE.INT32](payload, offset) {
-    const view = new DataView(payload.buffer)
-    return {
-      value: view.getInt32(offset),
-      min: view.getInt32(offset + 4),
-      max: view.getInt32(offset + 8),
-      default: view.getInt32(offset + 12),
-      unit: parseNullTerminatedString(payload.slice(offset + 16))
-    }
-  },
-
-  [PARAM_TYPE.FLOAT](payload, offset) {
-    const view = new DataView(payload.buffer)
-    return {
-      value: view.getInt32(offset),
-      min: view.getInt32(offset + 4),
-      max: view.getInt32(offset + 8),
-      default: view.getInt32(offset + 12),
-      decimalPoint: payload[offset + 16],
-      stepSize: view.getInt32(offset + 17),
-      unit: parseNullTerminatedString(payload.slice(offset + 21))
-    }
-  },
-
-  [PARAM_TYPE.TEXT_SELECTION](payload, offset) {
-    const view = new DataView(payload.buffer)
-    const { strValue, newOffset } = parseNullTerminatedString2(payload, offset)
-    const options = strValue.split(';')
-    offset = newOffset
-    const value = view.getUint8(offset)
-    const min = view.getUint8(offset + 1)
-    const max = view.getUint8(offset + 2)
-    const default_value = view.getUint8(offset + 3)
-    const unit = parseNullTerminatedString2(payload, offset + 4).strValue
-
-    return {
-      value,
-      min,
-      max,
-      default: default_value,
-      options,
-      unit
-    }
-  },
-
-  [PARAM_TYPE.STRING](payload, offset) {
-    const { strValue, newOffset } = parseNullTerminatedString2(payload, offset)
-    const maxLength = payload[newOffset]
-    return {
-      value: strValue,
-      maxLength
-    }
-  },
-
-  [PARAM_TYPE.FOLDER](payload, offset) {
-    const children = payload.slice(offset, -1)
-    return {
-      value: '',
-      children
-    }
-  },
-
-  [PARAM_TYPE.INFO](payload, offset) {
-    return {
-      value: parseNullTerminatedString(payload.slice(offset))
-    }
-  },
-
-  [PARAM_TYPE.COMMAND](payload, offset) {
-    const status = payload[offset++]
-    const timeout = payload[offset++]
-    return {
-      status,
-      timeout,
-      value: parseNullTerminatedString(payload.slice(offset))
-    }
-  }
-}
-
-const parameterSerializers = {
-  [PARAM_TYPE.UINT8](value) {
-    return new Uint8Array([value])
-  },
-
-  [PARAM_TYPE.INT8](value) {
-    return new Uint8Array([value])
-  },
-
-  [PARAM_TYPE.TEXT_SELECTION](value) {
-    return new Uint8Array([value])
-  },
-
-  [PARAM_TYPE.COMMAND](value) {
-    return new Uint8Array([
-      value.status,
-      value.timeout,
-      ...new TextEncoder().encode(value.value)
-    ])
-  }
-
-}
-
 // Store parameter chunks until complete
 const currentParameterChunks = ref([])
 
@@ -278,7 +70,7 @@ const handleParameterEntry = (frame) => {
       })
 
       // Parse the complete parameter
-      const { parentFolder, dataType, isHidden, name, offset: parseOffset } = parameterParsers.parseCommonFields(completeParameter)
+      const { parentFolder, dataType, isHidden, name, offset: parseOffset } = parseCommonFields(completeParameter)
 
       // Get the appropriate parser for this data type
       const parser = parameterParsers[dataType]
