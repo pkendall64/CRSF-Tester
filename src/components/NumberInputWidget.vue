@@ -35,6 +35,7 @@ const handleUpdate = (value) => {
       :model-value="modelValue"
       @update:model-value="handleUpdate"
       density="compact"
+      control-variant="stacked"
       hide-details
       v-bind="$attrs"
     />

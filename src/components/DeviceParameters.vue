@@ -269,31 +269,16 @@ onUnmounted(() => {
                 <v-row no-gutters class="mb-2" v-if="!param.isHidden">
                   <v-col cols="3" class="text-subtitle-1 d-flex align-center">{{ param.name }}</v-col>
                   <v-col class="d-flex align-center">
-                    <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
+                    <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8 ||
+                        param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16 ||
+                        param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
                       <NumberInputWidget
                         :min="param.min"
                         :max="param.max"
                         :unit="param.unit"
                         v-model="parameters[param.paramNumber].value"
                         @update:model-value="updateParameter(param.paramNumber)"
-                      />
-                    </template>
-                    <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
-                      <NumberInputWidget
-                        :min="param.min"
-                        :max="param.max"
-                        :unit="param.unit"
-                        v-model="parameters[param.paramNumber].value"
-                        @update:model-value="updateParameter(param.paramNumber)"
-                      />
-                    </template>
-                    <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
-                      <NumberInputWidget
-                        :min="param.min"
-                        :max="param.max"
-                        :unit="param.unit"
-                        v-model="parameters[param.paramNumber].value"
-                        @update:model-value="updateParameter(param.paramNumber)"
+                        class="text-selection-widget"
                       />
                     </template>
                     <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
@@ -341,7 +326,6 @@ onUnmounted(() => {
 <style scoped>
 .text-selection-widget {
   width: 100%;
-  max-width: 200px;
 }
 
 .parameters-container {
