@@ -16,7 +16,7 @@ const selectedItem = computed(() => {
 })
 
 const handleUpdate = (newSelectedItem) => {
-  model.value.value = model.value.options.indexOf(newSelectedItem);
+  model.value.value = model.value.options.indexOf(newSelectedItem)
   emits('update:modelValue', model.value)
 }
 
@@ -24,11 +24,23 @@ const handleUpdate = (newSelectedItem) => {
 
 <template>
   <v-select 
-    :items="model.options" 
+    :items="model.options"
     :model-value="selectedItem" 
     @update:model-value="handleUpdate"
     density="compact"
     hide-details
     v-bind="$attrs"
-  ></v-select>
+  >
+    <template v-if="model.unit" #append-inner>
+      <v-chip
+        size="small"
+        variant="outlined"
+        class="ml-2"
+        density="compact"
+        color="success"
+      >
+        {{ model.unit }}
+      </v-chip>
+    </template>
+  </v-select>
 </template>

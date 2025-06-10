@@ -3,6 +3,7 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
 import { useDeviceId } from '../composables/useDeviceId'
 import TextSelectionWidget from "@/components/TextSelectionWidget.vue";
+import NumberInputWidget from "@/components/NumberInputWidget.vue";
 import { PARAM_TYPE, parseCommonFields } from '../constants/parameterTypes'
 import { parameterParsers, parameterSerializers } from '../utils/parameterParsers'
 
@@ -266,19 +267,34 @@ onUnmounted(() => {
             <div :key="folder" class="parameters-content">
               <template v-for="param in currentFolderContent" :key="param.name">
                 <v-row no-gutters class="mb-2" v-if="!param.isHidden">
-                  <v-col cols="5" class="text-subtitle-1 d-flex align-center">{{ param.name }}</v-col>
-                  <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 4 : 5" class="d-flex align-center">
+                  <v-col cols="3" class="text-subtitle-1 d-flex align-center">{{ param.name }}</v-col>
+                  <v-col class="d-flex align-center">
                     <template v-if="param.type === PARAM_TYPE.UINT8 || param.type === PARAM_TYPE.INT8">
-                      <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
-                        @update:model-value="updateParameter(param.paramNumber)" density="compact" hide-details></VNumberInput>
+                      <NumberInputWidget
+                        :min="param.min"
+                        :max="param.max"
+                        :unit="param.unit"
+                        v-model="parameters[param.paramNumber].value"
+                        @update:model-value="updateParameter(param.paramNumber)"
+                      />
                     </template>
                     <template v-if="param.type === PARAM_TYPE.UINT16 || param.type === PARAM_TYPE.INT16">
-                      <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
-                        @update:model-value="updateParameter(param.paramNumber)" density="compact" hide-details></VNumberInput>
+                      <NumberInputWidget
+                        :min="param.min"
+                        :max="param.max"
+                        :unit="param.unit"
+                        v-model="parameters[param.paramNumber].value"
+                        @update:model-value="updateParameter(param.paramNumber)"
+                      />
                     </template>
                     <template v-if="param.type === PARAM_TYPE.UINT32 || param.type === PARAM_TYPE.INT32">
-                      <VNumberInput :min="param.min" :max="param.max" v-model="parameters[param.paramNumber].value"
-                        @update:model-value="updateParameter(param.paramNumber)" density="compact" hide-details></VNumberInput>
+                      <NumberInputWidget
+                        :min="param.min"
+                        :max="param.max"
+                        :unit="param.unit"
+                        v-model="parameters[param.paramNumber].value"
+                        @update:model-value="updateParameter(param.paramNumber)"
+                      />
                     </template>
                     <template v-else-if="param.type === PARAM_TYPE.TEXT_SELECTION">
                       <TextSelectionWidget v-model="parameters[param.paramNumber]" @update:model-value="updateParameter(param.paramNumber)" class="text-selection-widget" />
@@ -302,7 +318,6 @@ onUnmounted(() => {
                       {{ param.value }}
                     </template>
                   </v-col>
-                  <v-col :cols="param.type === PARAM_TYPE.TEXT_SELECTION ? 3 : 2" class="d-flex align-center">{{ param.unit || '' }}</v-col>
                 </v-row>
               </template>
               <v-row v-if="folder !== 0" class="mt-4 mb-2">
