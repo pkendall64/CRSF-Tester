@@ -12,6 +12,7 @@ export default defineConfig({
     vuetify(),
     vueDevTools(),
   ],
+  base: "./", // so paths are relative for github-pages
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
