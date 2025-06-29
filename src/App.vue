@@ -15,21 +15,10 @@ const connectionDialog = ref(true)
 const { isConnected } = useSerialPort()
 const { selectedDeviceId } = useDeviceId()
 const selectedDevice = ref(null)
-const showAttitude = ref(false)
 const showGps = ref(false)
 const showChannels = ref(false)
-const showLinkStats = ref(false)
-const showDeviceDiscovery = ref(false)
 const showBattery = ref(false)
 const showAttitude3D = ref(false)
-
-// Device ID options
-const deviceIds = [
-  { title: 'Flight Controller (0xC8)', value: '0xC8' },
-  { title: 'Radio Transmitter (0xEA)', value: '0xEA' },
-  { title: 'USB Device (0x10)', value: '0x10' },
-  { title: 'Broadcast (0x00)', value: '0x00' }
-]
 
 const onConnected = (connectionInfo) => {
   console.log('Connected to port:', connectionInfo)
@@ -70,9 +59,6 @@ const getStatusColor = computed(() => {
     <v-app-bar>
       <v-app-bar-title>CRSF Tester</v-app-bar-title>
       <template v-slot:append>
-        <span class="text-subtitle-2 mr-2">My Device ID:</span>
-        <v-select v-model="selectedDeviceId" :items="deviceIds" density="compact" hide-details
-          class="device-select mr-4" variant="outlined" />
         <v-chip :color="getStatusColor" size="small" class="mr-2">
           {{ getConnectionStatus }}
         </v-chip>
@@ -129,8 +115,15 @@ const getStatusColor = computed(() => {
 
     <!-- Connection Dialog -->
     <v-dialog v-model="connectionDialog" persistent width="auto">
-      <SerialPortConnection ref="serialPort" :initial-baud-rate="115200" @connected="onConnected"
-        @disconnected="onDisconnected" @error="onError" @status-change="onStatusChange" />
+      <SerialPortConnection
+        ref="serialPort"
+        :initial-baud-rate="115200"
+        v-model:selected-device-id="selectedDeviceId"
+        @connected="onConnected"
+        @disconnected="onDisconnected"
+        @error="onError"
+        @status-change="onStatusChange"
+      />
     </v-dialog>
   </v-app>
 </template>
@@ -139,19 +132,6 @@ const getStatusColor = computed(() => {
 .v-navigation-drawer :deep(.v-list-item--selected) {
   background-color: rgb(var(--v-theme-primary));
   color: white;
-}
-
-.fill-width {
-  width: 100% !important;
-  max-width: 100% !important;
-}
-
-.device-select {
-  max-width: 250px;
-}
-
-:deep(.v-field__input) {
-  min-height: 32px !important;
 }
 
 .main-container {
