@@ -116,6 +116,7 @@ onUnmounted(() => {
           :color="getColor(value)"
           height="16"
           rounded
+          class="no-transition-progress"
         >
           <span class="channel-value">
             {{ formatValue(value) }}
@@ -152,6 +153,6 @@ onUnmounted(() => {
 
 :deep(.v-progress-linear) {
   flex-grow: 1;
-  transition: all 0.2s ease-out;
+  transition: none;
 }
 </style>
