@@ -106,8 +106,8 @@ const resetFailsafeTimer = () => {
 }
 
 const convertRSSI = (rssi) => {
-  if (rssi < 0) {
-    return rssi
+  if (rssi < 128) {
+    return -rssi
   }
   return rssi - 256 // dodgy hack for TX side of things!
 }
