@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useSerialPort } from '../composables/useSerialPort'
 import { useDeviceId } from '../composables/useDeviceId'
 import TextSelectionWidget from "@/components/TextSelectionWidget.vue";
@@ -78,7 +78,8 @@ const createDefaultCommandExecutionState = () => ({
   timeout: COMMAND_POLL_FALLBACK_TIMEOUT_MS,
   info: '',
   awaitingPollResponse: false,
-  lastResponseAt: 0
+  lastResponseAt: 0,
+  pollResponseCount: 0
 })
 
 const commandDialog = ref(false)
@@ -89,6 +90,11 @@ const commandResponseChunks = ref([])
 let commandPollIntervalId = null
 
 const getCommandStatusLabel = (status) => COMMAND_STATUS_LABELS[status] ?? `Unknown (${status})`
+
+const commandPropellerStyle = computed(() => ({
+  transform: `rotate(${commandExecution.value.pollResponseCount * 120}deg)`,
+  transitionDuration: `${Math.max(commandExecution.value.timeout || COMMAND_POLL_FALLBACK_TIMEOUT_MS, 10)}ms`
+}))
 
 const combineChunks = (chunks) => {
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
@@ -275,7 +281,8 @@ const beginCommandExecution = (index) => {
     timeout: parameter.timeout ?? COMMAND_POLL_FALLBACK_TIMEOUT_MS,
     info: parameter.value ?? '',
     awaitingPollResponse: false,
-    lastResponseAt: Date.now()
+    lastResponseAt: Date.now(),
+    pollResponseCount: 0
   }
 
   commandResponseChunks.value = []
@@ -298,6 +305,7 @@ const handleCommandResponseChunk = (paramNumber, chunksRemaining, paramData) => 
   if (isFirstChunk) {
     commandExecution.value.awaitingPollResponse = false
     commandExecution.value.lastResponseAt = Date.now()
+    commandExecution.value.pollResponseCount += 1
 
     const firstChunkHeader = extractCommandResponseHeaderFromFirstChunk(paramData)
     if (firstChunkHeader) {
@@ -639,7 +647,18 @@ onUnmounted(() => {
       </v-card-title>
       <v-card-text>
         <div class="text-subtitle-1 mb-2">{{ commandExecution.name || 'Command' }}</div>
-        <div class="text-body-2 mb-1">Status: {{ getCommandStatusLabel(commandExecution.status) }}</div>
+        <div class="text-body-2 mb-1 d-flex align-center">
+          Status: {{ getCommandStatusLabel(commandExecution.status) }}
+          <span
+            v-if="commandExecution.active"
+            class="polling-propeller"
+            :class="{ 'polling-propeller--awaiting': commandExecution.awaitingPollResponse }"
+            :style="commandPropellerStyle"
+            aria-label="Polling response indicator"
+          >
+            ✦
+          </span>
+        </div>
         <div class="text-body-2 mb-1">Timeout: {{ commandExecution.timeout }} ms</div>
         <div class="text-body-2">Message: {{ commandExecution.info || '-' }}</div>
       </v-card-text>
@@ -716,5 +735,23 @@ onUnmounted(() => {
 .slide-back-leave-to {
   transform: translateX(100%);
   opacity: 0;
+}
+
+.polling-propeller {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  font-size: 18px;
+  line-height: 1;
+  color: #616161;
+  transition-property: transform, color;
+  transition-timing-function: linear, ease-in-out;
+  transition-duration: 120ms, 120ms;
+  transform-origin: center center;
+}
+
+.polling-propeller--awaiting {
+  color: #1976d2;
 }
 </style>
