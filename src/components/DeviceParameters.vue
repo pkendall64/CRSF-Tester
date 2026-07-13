@@ -4,7 +4,7 @@ import { useSerialPort } from '../composables/useSerialPort'
 import { useDeviceId } from '../composables/useDeviceId'
 import TextSelectionWidget from "@/components/TextSelectionWidget.vue";
 import NumberInputWidget from "@/components/NumberInputWidget.vue";
-import { PARAM_TYPE, parseCommonFields } from '../constants/parameterTypes'
+import { PARAM_TYPE, parseCommonFields, parseNullTerminatedString } from '../constants/parameterTypes'
 import { parameterParsers, parameterSerializers } from '../utils/parameterParsers'
 
 const props = defineProps({
@@ -26,6 +26,26 @@ const CRSF_FRAMETYPE_PARAM_ENTRY = 0x2B
 const CRSF_FRAMETYPE_PARAM_READ = 0x2C
 const CRSF_FRAMETYPE_PARAM_WRITE = 0x2D
 
+const COMMAND_STATUS = {
+  STOPPED: 0,
+  START: 1,
+  RUNNING: 2,
+  CONFIRMATION: 3,
+  CONFIRMED: 4,
+  STOP: 5,
+  POLL: 6
+}
+
+const COMMAND_STATUS_LABELS = {
+  [COMMAND_STATUS.STOPPED]: 'Stopped',
+  [COMMAND_STATUS.START]: 'Starting',
+  [COMMAND_STATUS.RUNNING]: 'Running',
+  [COMMAND_STATUS.CONFIRMATION]: 'Awaiting confirmation',
+  [COMMAND_STATUS.CONFIRMED]: 'Confirmed',
+  [COMMAND_STATUS.STOP]: 'Stopping',
+  [COMMAND_STATUS.POLL]: 'Polling'
+}
+
 const { sendFrame, registerFrameHandler, unregisterFrameHandler } = useSerialPort()
 const { getDeviceIdNumber } = useDeviceId()
 
@@ -46,73 +66,352 @@ const loadedParameterCount = ref(0)
 // Store parameter chunks until complete
 const currentParameterChunks = ref([])
 
+const COMMAND_POLL_FALLBACK_TIMEOUT_MS = 200
+const COMMAND_NO_RESPONSE_TIMEOUT_MS = 5000
+
+const createDefaultCommandExecutionState = () => ({
+  active: false,
+  isPolling: false,
+  paramNumber: null,
+  name: '',
+  status: COMMAND_STATUS.STOPPED,
+  timeout: COMMAND_POLL_FALLBACK_TIMEOUT_MS,
+  info: '',
+  awaitingPollResponse: false,
+  lastResponseAt: 0
+})
+
+const commandDialog = ref(false)
+const disconnectedErrorDialog = ref(false)
+const disconnectedErrorMessage = ref('')
+const commandExecution = ref(createDefaultCommandExecutionState())
+const commandResponseChunks = ref([])
+let commandPollIntervalId = null
+
+const getCommandStatusLabel = (status) => COMMAND_STATUS_LABELS[status] ?? `Unknown (${status})`
+
+const combineChunks = (chunks) => {
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const combinedData = new Uint8Array(totalLength)
+  let offset = 0
+
+  chunks.forEach(chunk => {
+    combinedData.set(chunk, offset)
+    offset += chunk.length
+  })
+
+  return combinedData
+}
+
+const parseParameterChunks = (paramNumber, chunks) => {
+  const completeParameter = combineChunks(chunks)
+  const { parentFolder, dataType, isHidden, name, offset: parseOffset } = parseCommonFields(completeParameter)
+
+  if (dataType === PARAM_TYPE.COMMAND) {
+    const status = completeParameter[parseOffset]
+    const timeout = completeParameter[parseOffset + 1]
+    const value = parseNullTerminatedString(completeParameter.slice(parseOffset + 2))
+
+    return {
+      paramNumber,
+      parentFolder,
+      type: dataType,
+      isHidden,
+      name,
+      status,
+      timeout,
+      value
+    }
+  }
+
+  const parser = parameterParsers[dataType]
+  if (!parser) {
+    console.warn(`Unknown parameter type: 0x${dataType.toString(16)}`)
+    return null
+  }
+
+  const typeFields = parser(completeParameter, parseOffset)
+
+  return {
+    paramNumber,
+    parentFolder,
+    type: dataType,
+    isHidden,
+    name,
+    ...typeFields
+  }
+}
+
+const extractCommandResponseHeaderFromFirstChunk = (chunk) => {
+  if (!chunk || chunk.length < 5) {
+    return null
+  }
+
+  const nameNullRelativeIndex = chunk.slice(2).findIndex(byte => byte === 0)
+  if (nameNullRelativeIndex < 0) {
+    return null
+  }
+
+  const statusIndex = 2 + nameNullRelativeIndex + 1
+  const timeoutIndex = statusIndex + 1
+
+  if (timeoutIndex >= chunk.length) {
+    return null
+  }
+
+  return {
+    status: chunk[statusIndex],
+    timeout: chunk[timeoutIndex]
+  }
+}
+
+const stopCommandPolling = () => {
+  if (commandPollIntervalId) {
+    clearInterval(commandPollIntervalId)
+    commandPollIntervalId = null
+  }
+
+  commandExecution.value.isPolling = false
+}
+
+const handleCommandPollingDisconnected = () => {
+  commandDialog.value = false
+  disconnectedErrorMessage.value = `No response received for ${Math.floor(COMMAND_NO_RESPONSE_TIMEOUT_MS / 1000)} seconds. Device appears disconnected.`
+  disconnectedErrorDialog.value = true
+  resetCommandExecution()
+}
+
+const startCommandPollingLoop = () => {
+  if (!commandExecution.value.active || commandExecution.value.paramNumber === null) {
+    return
+  }
+
+  stopCommandPolling()
+
+  const pollDelay = Math.max(commandExecution.value.timeout || COMMAND_POLL_FALLBACK_TIMEOUT_MS, 10)
+  commandExecution.value.isPolling = true
+
+  if (!commandExecution.value.lastResponseAt) {
+    commandExecution.value.lastResponseAt = Date.now()
+  }
+
+  commandPollIntervalId = setInterval(async () => {
+    if (!commandExecution.value.active || commandExecution.value.paramNumber === null) {
+      return
+    }
+
+    if (Date.now() - commandExecution.value.lastResponseAt >= COMMAND_NO_RESPONSE_TIMEOUT_MS) {
+      handleCommandPollingDisconnected()
+      return
+    }
+
+    const pollSent = await sendCommandStatus(commandExecution.value.paramNumber, COMMAND_STATUS.POLL, {
+      timeout: commandExecution.value.timeout,
+      value: commandExecution.value.info
+    })
+
+    if (pollSent) {
+      commandExecution.value.awaitingPollResponse = true
+    }
+  }, pollDelay)
+}
+
+const resetCommandExecution = () => {
+  stopCommandPolling()
+  commandResponseChunks.value = []
+  commandExecution.value = createDefaultCommandExecutionState()
+}
+
+const sendCommandStatus = async (index, status, options = {}) => {
+  const parameter = parameters.value[index]
+  if (!parameter || parameter.type !== PARAM_TYPE.COMMAND) {
+    return false
+  }
+
+  const serializer = parameterSerializers[PARAM_TYPE.COMMAND]
+  if (!serializer) {
+    return false
+  }
+
+  const timeout = options.timeout ?? commandExecution.value.timeout ?? parameter.timeout ?? COMMAND_POLL_FALLBACK_TIMEOUT_MS
+  const value = options.value ?? commandExecution.value.info ?? parameter.value ?? ''
+
+  const data = serializer({
+    status,
+    timeout,
+    value
+  })
+
+  const frame = {
+    type: CRSF_FRAMETYPE_PARAM_WRITE,
+    destination: props.deviceId,
+    origin: getDeviceIdNumber(),
+    payload: new Uint8Array([index, ...data])
+  }
+
+  await sendFrame(frame)
+  return true
+}
+
+const beginCommandExecution = (index) => {
+  if (commandExecution.value.active) {
+    return false
+  }
+
+  const parameter = parameters.value[index]
+  if (!parameter || parameter.type !== PARAM_TYPE.COMMAND) {
+    return false
+  }
+
+  disconnectedErrorDialog.value = false
+  disconnectedErrorMessage.value = ''
+
+  commandExecution.value = {
+    active: true,
+    isPolling: false,
+    paramNumber: index,
+    name: parameter.name,
+    status: COMMAND_STATUS.START,
+    timeout: parameter.timeout ?? COMMAND_POLL_FALLBACK_TIMEOUT_MS,
+    info: parameter.value ?? '',
+    awaitingPollResponse: false,
+    lastResponseAt: Date.now()
+  }
+
+  commandResponseChunks.value = []
+  commandDialog.value = true
+  return true
+}
+
+const finalizeStoppedCommand = () => {
+  commandExecution.value.active = false
+  commandDialog.value = false
+  resetCommandExecution()
+
+  setTimeout(() => {
+    loadParameters(false)
+  }, 100)
+}
+
+const handleCommandResponseChunk = (paramNumber, chunksRemaining, paramData) => {
+  const isFirstChunk = commandResponseChunks.value.length === 0
+  if (isFirstChunk) {
+    commandExecution.value.awaitingPollResponse = false
+    commandExecution.value.lastResponseAt = Date.now()
+
+    const firstChunkHeader = extractCommandResponseHeaderFromFirstChunk(paramData)
+    if (firstChunkHeader) {
+      commandExecution.value.status = firstChunkHeader.status
+      commandExecution.value.timeout = firstChunkHeader.timeout ?? commandExecution.value.timeout
+
+      // Keep polling cadence synced to latest response timeout
+      startCommandPollingLoop()
+    }
+
+    if (commandExecution.value.status === COMMAND_STATUS.STOPPED) {
+      finalizeStoppedCommand()
+      return
+    }
+  }
+
+  commandResponseChunks.value.push(paramData)
+
+  if (chunksRemaining > 0) {
+    return
+  }
+
+  const commandParameter = parseParameterChunks(paramNumber, commandResponseChunks.value)
+  commandResponseChunks.value = []
+
+  if (!commandParameter || commandParameter.type !== PARAM_TYPE.COMMAND) {
+    return
+  }
+
+  parameters.value[paramNumber] = commandParameter
+  commandExecution.value.status = commandParameter.status
+  commandExecution.value.timeout = commandParameter.timeout ?? commandExecution.value.timeout
+  commandExecution.value.info = commandParameter.value ?? ''
+  commandExecution.value.name = commandParameter.name ?? commandExecution.value.name
+
+  if (commandExecution.value.status === COMMAND_STATUS.STOPPED) {
+    finalizeStoppedCommand()
+  }
+}
+
+const stopActiveCommand = async () => {
+  if (!commandExecution.value.active || commandExecution.value.paramNumber === null) {
+    return
+  }
+
+  const stopSent = await sendCommandStatus(commandExecution.value.paramNumber, COMMAND_STATUS.STOP, {
+    timeout: commandExecution.value.timeout,
+    value: commandExecution.value.info
+  })
+
+  if (stopSent) {
+    commandExecution.value.status = COMMAND_STATUS.STOP
+  }
+}
+
+const closeCommandDialog = () => {
+  commandDialog.value = false
+  resetCommandExecution()
+}
+
+const closeDisconnectedErrorDialog = () => {
+  disconnectedErrorDialog.value = false
+  disconnectedErrorMessage.value = ''
+}
+
 // Handle incoming parameter entry frames
 // Processes chunks of parameter data and assembles complete parameters
-const handleParameterEntry = (frame) => {
-  if (frame.type === CRSF_FRAMETYPE_PARAM_ENTRY && frame.origin === props.deviceId) {
-    const paramNumber = frame.payload[0]
-    const chunksRemaining = frame.payload[1]
-    const paramData = frame.payload.slice(2)
+const handleParameterEntry = async (frame) => {
+  if (frame.type !== CRSF_FRAMETYPE_PARAM_ENTRY || frame.origin !== props.deviceId) {
+    return
+  }
 
-    // Add chunk to current parameter data
-    currentParameterChunks.value.push(paramData)
-    currentChunk.value.chunkNumber++
+  const paramNumber = frame.payload[0]
+  const chunksRemaining = frame.payload[1]
+  const paramData = frame.payload.slice(2)
 
-    // If this is the last chunk, parse the complete parameter
-    if (chunksRemaining === 0) {
-      // Combine all chunks into one buffer
-      const totalLength = currentParameterChunks.value.reduce((sum, chunk) => sum + chunk.length, 0)
-      const completeParameter = new Uint8Array(totalLength)
-      let offset = 0
+  if (commandExecution.value.active && paramNumber === commandExecution.value.paramNumber) {
+    await handleCommandResponseChunk(paramNumber, chunksRemaining, paramData)
+    return
+  }
 
-      currentParameterChunks.value.forEach(chunk => {
-        completeParameter.set(chunk, offset)
-        offset += chunk.length
-      })
+  // Add chunk to current parameter data
+  currentParameterChunks.value.push(paramData)
+  currentChunk.value.chunkNumber++
 
-      // Parse the complete parameter
-      const { parentFolder, dataType, isHidden, name, offset: parseOffset } = parseCommonFields(completeParameter)
+  // If this is the last chunk, parse the complete parameter
+  if (chunksRemaining === 0) {
+    const parameter = parseParameterChunks(paramNumber, currentParameterChunks.value)
 
-      // Get the appropriate parser for this data type
-      const parser = parameterParsers[dataType]
-      if (!parser) {
-        console.warn(`Unknown parameter type: 0x${dataType.toString(16)}`)
-        return
-      }
-
-      // Parse the type-specific fields
-      const typeFields = parser(completeParameter, parseOffset)
-
-      // Combine all fields into the final parameter object
-      const parameter = {
-        paramNumber,
-        parentFolder,
-        type: dataType,
-        isHidden,
-        name,
-        ...typeFields
-      }
-
-      // Add or update parameter
-      parameters.value[currentChunk.value.paramNumber] = parameter
-      loadedParameterCount.value = parameters.value.length - 1
-
-      // Clear chunks buffer for next parameter
+    if (!parameter) {
       currentParameterChunks.value = []
       currentChunk.value.chunkNumber = 0
-
-      // Move to next parameter or finish if none in the queue
-      if (parameterQueue.length > 0) {
-        currentChunk.value.paramNumber = parameterQueue.pop()
-      } else {
-        loading.value = false
-      }
+      return
     }
 
-    // Request next chunk if still loading
-    if (loading.value) {
-      requestNextChunk()
+    // Add or update parameter
+    parameters.value[currentChunk.value.paramNumber] = parameter
+    loadedParameterCount.value = parameters.value.length - 1
+
+    // Clear chunks buffer for next parameter
+    currentParameterChunks.value = []
+    currentChunk.value.chunkNumber = 0
+
+    // Move to next parameter or finish if none in the queue
+    if (parameterQueue.length > 0) {
+      currentChunk.value.paramNumber = parameterQueue.pop()
+    } else {
+      loading.value = false
     }
+  }
+
+  // Request next chunk if still loading
+  if (loading.value) {
+    requestNextChunk()
   }
 }
 
@@ -156,8 +455,18 @@ const updateCurrentFolderContent = () => {
   )
 }
 
-const executeCommand = (index) => {
-  console.log('execute:', index)
+const executeCommand = async (index) => {
+  const started = beginCommandExecution(index)
+  if (!started) {
+    return
+  }
+
+  await sendCommandStatus(index, COMMAND_STATUS.START, {
+    timeout: commandExecution.value.timeout,
+    value: commandExecution.value.info
+  })
+
+  startCommandPollingLoop()
 }
 
 const updateParameter = (index) => {
@@ -291,8 +600,8 @@ onUnmounted(() => {
                       </v-btn>
                     </template>
                     <template v-else-if="param.type === PARAM_TYPE.COMMAND">
-                      <v-btn color="secondary" size="small" @click="executeCommand(param.paramNumber)" :disabled="isTransitioning">
-                        <v-icon start>mdi-folder</v-icon>
+                      <v-btn color="secondary" size="small" @click="executeCommand(param.paramNumber)" :disabled="isTransitioning || commandExecution.active">
+                        <v-icon start>mdi-play</v-icon>
                         Execute
                       </v-btn>
                     </template>
@@ -321,6 +630,42 @@ onUnmounted(() => {
       <v-alert v-else type="info" text="No parameters loaded"></v-alert>
     </v-card-text>
   </v-card>
+
+  <v-dialog :model-value="commandDialog" persistent max-width="520" @update:model-value="closeCommandDialog">
+    <v-card>
+      <v-card-title class="d-flex align-center">
+        <v-icon start color="secondary">mdi-progress-clock</v-icon>
+        Running Command
+      </v-card-title>
+      <v-card-text>
+        <div class="text-subtitle-1 mb-2">{{ commandExecution.name || 'Command' }}</div>
+        <div class="text-body-2 mb-1">Status: {{ getCommandStatusLabel(commandExecution.status) }}</div>
+        <div class="text-body-2 mb-1">Timeout: {{ commandExecution.timeout }} ms</div>
+        <div class="text-body-2">Message: {{ commandExecution.info || '-' }}</div>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn color="grey-darken-1" variant="text" @click="closeCommandDialog">Close</v-btn>
+        <v-btn color="error" :disabled="!commandExecution.active" @click="stopActiveCommand">Stop</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog :model-value="disconnectedErrorDialog" max-width="520" @update:model-value="closeDisconnectedErrorDialog">
+    <v-card>
+      <v-card-title class="d-flex align-center">
+        <v-icon start color="error">mdi-alert-circle</v-icon>
+        Device Disconnected
+      </v-card-title>
+      <v-card-text>
+        {{ disconnectedErrorMessage }}
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn color="primary" @click="closeDisconnectedErrorDialog">OK</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>
