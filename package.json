@@ -10,13 +10,13 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
-    "three": "^0.182.0",
-    "vue": "^3.5.25",
-    "vuetify": "^3.11.3"
+    "three": "^0.185.1",
+    "vue": "^3.5.39",
+    "vuetify": "^4.1.4"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.2",
-    "vite-plugin-vue-devtools": "^8.0.5",
-    "vite-plugin-vuetify": "^2.1.2"
+    "@vitejs/plugin-vue": "^6.0.7",
+    "vite-plugin-vue-devtools": "^8.1.5",
+    "vite-plugin-vuetify": "^2.1.3"
   }
 }
