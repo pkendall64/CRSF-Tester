@@ -30,6 +30,24 @@ const parseUint32 = (array, offset) => {
     (array[offset + 3])
 }
 
+const parseDeviceSerialNumber = (array, offset) => {
+  const sn = parseUint32(array, offset);
+  // Value is 'ELRS' in ASCII
+  return (sn == 0x454C5253) ? "ELRS" : sn;
+}
+
+// Converts an uint32 into a dotted version number string e.g. 0x0004010c = 4.1.12
+const parseDeviceFirmwareVer = (array, offset) => {
+  // Extract uint32 to array
+  const ver = array.slice(offset, offset + 4);
+  // Find the first non-zero digit
+  const firstNonZeroIndex = ver.findIndex(num => num !== 0);
+  // All 0s? Return 0
+  if (firstNonZeroIndex === -1)
+    return '0';
+  return ver.slice(firstNonZeroIndex).join('.');
+}
+
 // Handler for DEVICE_INFO responses
 const handleDeviceInfo = (frame) => {
   if (frame.type === CRSF_FRAMETYPE_DEVICE_INFO) {
@@ -42,9 +60,9 @@ const handleDeviceInfo = (frame) => {
     const deviceInfo = {
       name: parseNullTerminatedString(payload),
       address: frame.origin,
-      serialNumber: parseUint32(payload, nameLength + 1),
+      serialNumber: parseDeviceSerialNumber(payload, nameLength + 1),
       hardwareId: parseUint32(payload, nameLength + 5),
-      firmwareId: parseUint32(payload, nameLength + 9),
+      firmwareId: parseDeviceFirmwareVer(payload, nameLength + 9),
       parametersTotal: payload[nameLength + 13],
       parameterVersion: payload[nameLength + 14],
       timestamp: new Date()
