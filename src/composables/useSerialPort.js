@@ -15,6 +15,16 @@ export function useSerialPort() {
 
   // CRSF protocol constants
   const CRSF_SYNC_BYTE = 0xC8
+  const DEBUG_SERIAL = true
+  const bytesToHex = (data) => Array.from(data ?? [])
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join(' ')
+  const debugLog = (...args) => {
+    if (DEBUG_SERIAL) {
+      console.log('[crsf-serial]', ...args)
+    }
+  }
+
 
   // CRC calculation for CRSF
   const calculateCRC = (data) => {
@@ -95,11 +105,10 @@ export function useSerialPort() {
 
     const crc = calculateCRC(frameBuffer.slice(2, frameBuffer.length - 1))
     frameBuffer[frameBuffer.length - 1] = crc
-
-    // Use the new logging function
     const hexLog = frameToHexString(frame)
-    // console.log('Sending frame:', hexLog.formatted)
-    // console.log('Frame parts:', hexLog.parts)
+ 
+
+    debugLog('tx', frameBuffer.length, hexLog.formatted)
 
     try {
       await writer.value.write(frameBuffer)
@@ -136,6 +145,8 @@ export function useSerialPort() {
 
       const frameLength = receiveBuffer[1]
       const totalLength = frameLength + 2
+      debugLog('rx-buffer', `have=${receiveBuffer.length}`, `need=${totalLength}`, `len=${frameLength}`, bytesToHex(receiveBuffer))
+ 
 
       if (receiveBuffer.length < totalLength) {
         break
@@ -152,11 +163,10 @@ export function useSerialPort() {
           origin: frameData[2] < 0x28 ? 0 : frameData[4],
           payload: frameData[2] < 0x28 ? frameData.slice(3, -1) : frameData.slice(5, -1)
         }
-
-        // Log received frame
         const hexLog = frameToHexString(frame)
-        // console.log('Received frame:', hexLog.formatted)
-        // console.log('Frame parts:', hexLog.parts)
+ 
+
+        debugLog('rx-frame', totalLength, hexLog.formatted)
 
         // Notify all registered handlers
         frameHandlers.value.forEach(handler => {
@@ -164,7 +174,7 @@ export function useSerialPort() {
         })
       }
       else {
-          console.log("Bad frame data" + frameData)
+          console.warn('[crsf-serial] bad frame data', bytesToHex(frameData))
       }
     }
   }
@@ -173,6 +183,7 @@ export function useSerialPort() {
     while (port.value && reader.value) {
       try {
         const { value, done } = await reader.value.read()
+        debugLog('reader-chunk', value?.length ?? 0, bytesToHex(value))
         if (done) {
           console.log('Reader closed')
           break
